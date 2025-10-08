@@ -49,7 +49,7 @@ PhotoWatermark2 是一个功能强大的图片水印处理工具，专为Windows
 
 ```bash
 # 克隆项目
-git clone https://github.com/yourusername/PhotoWatermark2.git
+git clone https://github.com/tingPetty/PhotoWatermark2.git
 
 # 进入项目目录
 cd PhotoWatermark2
@@ -81,6 +81,6 @@ pip install -r requirements.txt
 
 ## 联系方式
 
-项目维护者 - [@yourusername](https://github.com/yourusername)
+项目维护者 - [@tingPetty](https://github.com/tingPetty)
 
-项目链接: [https://github.com/yourusername/PhotoWatermark2](https://github.com/yourusername/PhotoWatermark2)
+项目链接: [https://github.com/tingPetty/PhotoWatermark2](https://github.com/tingPetty/PhotoWatermark2)
