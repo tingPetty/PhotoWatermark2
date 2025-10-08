@@ -1,0 +1,22 @@
+# GUI框架
+PyQt6>=6.4.0
+PyQt6-Qt6>=6.4.0
+PyQt6-sip>=13.4.0
+
+# 图像处理
+Pillow>=10.0.0
+
+# 配置管理
+PyYAML>=6.0.1
+
+# 图标资源
+qtawesome>=1.2.3
+
+# 开发工具
+pytest>=7.4.0
+pytest-qt>=4.2.0
+black>=23.7.0
+flake8>=6.1.0
+
+# 打包工具
+pyinstaller>=6.1.0
