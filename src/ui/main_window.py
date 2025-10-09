@@ -56,6 +56,8 @@ class MainWindow(QMainWindow):
         self.image_list = QListWidget()
         self.image_list.setMinimumWidth(200)
         self.image_list.itemClicked.connect(self._on_image_selected)
+        self.image_list.setSelectionMode(QListWidget.SelectionMode.ExtendedSelection)  # 启用多选
+        self.image_list.keyPressEvent = self._list_key_press_event  # 添加键盘事件处理
         splitter.addWidget(self.image_list)
         
         # 右侧区域
@@ -96,6 +98,12 @@ class MainWindow(QMainWindow):
         open_action.triggered.connect(self._open_image)
         file_menu.addAction(open_action)
         
+        # 打开文件夹动作
+        open_folder_action = QAction("打开文件夹", self)
+        open_folder_action.setShortcut("Ctrl+Shift+O")
+        open_folder_action.triggered.connect(self._open_folder)
+        file_menu.addAction(open_folder_action)
+        
         # 保存图片动作
         save_action = QAction("保存图片", self)
         save_action.setShortcut("Ctrl+S")
@@ -132,6 +140,16 @@ class MainWindow(QMainWindow):
         open_action = QAction("打开图片", self)
         open_action.triggered.connect(self._open_image)
         tool_bar.addAction(open_action)
+        
+        # 添加打开文件夹按钮
+        open_folder_action = QAction("打开文件夹", self)
+        open_folder_action.triggered.connect(self._open_folder)
+        tool_bar.addAction(open_folder_action)
+        
+        # 添加删除图片按钮
+        remove_action = QAction("删除图片", self)
+        remove_action.triggered.connect(self._remove_selected_images)
+        tool_bar.addAction(remove_action)
         
         # 添加保存图片按钮
         save_action = QAction("保存图片", self)
@@ -238,11 +256,67 @@ class MainWindow(QMainWindow):
         file_paths = []
         for url in event.mimeData().urls():
             file_path = url.toLocalFile()
-            # 检查是否是支持的图片格式
-            ext = os.path.splitext(file_path)[1].lower()
-            if ext in ['.jpg', '.jpeg', '.png', '.bmp', '.gif']:
+            if os.path.isdir(file_path):
+                # 如果是文件夹，处理文件夹
+                self._process_folder(file_path)
+            elif ImageProcessor.is_supported_format(file_path):
+                # 如果是支持的图片格式
                 file_paths.append(file_path)
         
         if file_paths:
             self._load_images(file_paths)
             self.status_label.setText(f"已导入 {len(file_paths)} 个图片文件")
+            
+    def _open_folder(self):
+        """打开文件夹对话框"""
+        folder_path = QFileDialog.getExistingDirectory(self, "选择图片文件夹")
+        if folder_path:
+            self._process_folder(folder_path)
+            
+    def _process_folder(self, folder_path):
+        """处理文件夹中的图片"""
+        image_count = 0
+        for root, _, files in os.walk(folder_path):
+            for file in files:
+                file_path = os.path.join(root, file)
+                if ImageProcessor.is_supported_format(file_path):
+                    self._load_images([file_path])
+                    image_count += 1
+        
+        self.status_label.setText(f"从文件夹导入了 {image_count} 个图片文件")
+        
+    def _remove_selected_images(self):
+        """删除选中的图片"""
+        selected_items = self.image_list.selectedItems()
+        if not selected_items:
+            return
+            
+        for item in selected_items:
+            row = self.image_list.row(item)
+            file_path = item.data(Qt.ItemDataRole.UserRole)
+            
+            # 从列表中移除
+            self.image_list.takeItem(row)
+            
+            # 从文件列表中移除
+            if file_path in self.image_files:
+                self.image_files.remove(file_path)
+                
+        # 更新状态栏
+        self.status_label.setText(f"已删除 {len(selected_items)} 个图片")
+        
+        # 如果当前没有选中的图片，清空预览区域
+        if self.image_list.count() == 0:
+            self.preview_area.clear()
+            self.current_image = None
+        elif self.image_list.currentItem():
+            self._on_image_selected(self.image_list.currentItem())
+            
+    def _list_key_press_event(self, event):
+        """处理图片列表的键盘事件"""
+        # 处理Delete键删除图片
+        if event.key() == Qt.Key.Key_Delete:
+            self._remove_selected_images()
+        else:
+            # 调用原始的keyPressEvent方法处理其他键盘事件
+            QListWidget.keyPressEvent(self.image_list, event)

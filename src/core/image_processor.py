@@ -6,13 +6,39 @@
 """
 
 import os
-from PIL import Image
+from PIL import Image, UnidentifiedImageError
 from PyQt6.QtGui import QPixmap, QImage
 from PyQt6.QtCore import Qt
+
+# 支持的图片格式
+SUPPORTED_FORMATS = {
+    # 必需格式
+    '.jpg': 'JPEG',
+    '.jpeg': 'JPEG',
+    '.png': 'PNG',
+    # 建议格式
+    '.bmp': 'BMP',
+    '.tiff': 'TIFF',
+    '.tif': 'TIFF'
+}
 
 
 class ImageProcessor:
     """图片处理类"""
+    
+    @staticmethod
+    def is_supported_format(file_path):
+        """
+        检查文件是否为支持的图片格式
+        
+        Args:
+            file_path: 文件路径
+            
+        Returns:
+            bool: 是否支持
+        """
+        ext = os.path.splitext(file_path)[1].lower()
+        return ext in SUPPORTED_FORMATS
     
     @staticmethod
     def load_image(file_path):
