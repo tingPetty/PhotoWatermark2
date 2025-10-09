@@ -279,6 +279,18 @@ class EventHandlers:
                 self.main_window.menu_actions['save_action'].triggered.connect(
                     self.main_window.file_manager.save_current_image
                 )
+            
+            # 连接导出图片动作
+            if 'export_action' in self.main_window.menu_actions:
+                self.main_window.menu_actions['export_action'].triggered.connect(
+                    self.main_window.file_manager.export_current_image
+                )
+            
+            # 连接批量导出动作
+            if 'export_all_action' in self.main_window.menu_actions:
+                self.main_window.menu_actions['export_all_action'].triggered.connect(
+                    self.main_window.file_manager.export_all_images
+                )
     
     def _connect_toolbar_actions(self):
         """连接工具栏动作事件"""
@@ -305,6 +317,18 @@ class EventHandlers:
             if 'save_action' in self.main_window.toolbar_actions:
                 self.main_window.toolbar_actions['save_action'].triggered.connect(
                     self.main_window.file_manager.save_current_image
+                )
+            
+            # 连接导出图片动作
+            if 'export_action' in self.main_window.toolbar_actions:
+                self.main_window.toolbar_actions['export_action'].triggered.connect(
+                    self.main_window.file_manager.export_current_image
+                )
+            
+            # 连接批量导出动作
+            if 'export_all_action' in self.main_window.toolbar_actions:
+                self.main_window.toolbar_actions['export_all_action'].triggered.connect(
+                    self.main_window.file_manager.export_all_images
                 )
             
             # 连接添加水印动作

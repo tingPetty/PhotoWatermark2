@@ -263,10 +263,12 @@ class UIComponents:
         open_folder_action.setShortcut("Ctrl+Shift+O")
         file_menu.addAction(open_folder_action)
         
-        # 保存图片动作
-        save_action = QAction("保存图片", self.main_window)
-        save_action.setShortcut("Ctrl+S")
-        file_menu.addAction(save_action)
+        file_menu.addSeparator()
+        
+        # 导出图片动作
+        export_action = QAction("导出图片", self.main_window)
+        export_action.setShortcut("Ctrl+E")
+        file_menu.addAction(export_action)
         
         file_menu.addSeparator()
         
@@ -292,7 +294,7 @@ class UIComponents:
         return {
             'open_action': open_action,
             'open_folder_action': open_folder_action,
-            'save_action': save_action,
+            'export_action': export_action,
             'exit_action': exit_action,
             'about_action': about_action
         }
@@ -315,9 +317,9 @@ class UIComponents:
         remove_action = QAction("删除图片", self.main_window)
         tool_bar.addAction(remove_action)
         
-        # 添加保存图片按钮
-        save_action = QAction("保存图片", self.main_window)
-        tool_bar.addAction(save_action)
+        # 添加导出图片按钮
+        export_action = QAction("导出图片", self.main_window)
+        tool_bar.addAction(export_action)
         
         tool_bar.addSeparator()
         
@@ -329,7 +331,7 @@ class UIComponents:
             'open_action': open_action,
             'open_folder_action': open_folder_action,
             'remove_action': remove_action,
-            'save_action': save_action,
+            'export_action': export_action,
             'add_watermark_action': add_watermark_action
         }
     

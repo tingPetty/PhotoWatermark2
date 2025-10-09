@@ -59,6 +59,7 @@ class WatermarkHandler:
         # 设置字体和颜色
         font = QFont("Arial", 20, QFont.Weight.Bold)
         painter.setFont(font)
+        painter.setPen(QColor(0, 0, 0))  # 设置黑色文本
         
         # 设置透明度
         painter.setOpacity(self.main_window.watermark_opacity / 100.0)
@@ -85,23 +86,42 @@ class WatermarkHandler:
         # 转换为QPixmap
         pixmap = ImageProcessor.pil_to_pixmap(image)
         
+        # 计算水印位置的缩放比例
+        # 获取当前预览图片的尺寸
+        current_preview_pixmap = self.main_window.preview_area.pixmap()
+        if current_preview_pixmap and not current_preview_pixmap.isNull():
+            # 计算从预览尺寸到原始尺寸的缩放比例
+            scale_x = pixmap.width() / current_preview_pixmap.width()
+            scale_y = pixmap.height() / current_preview_pixmap.height()
+            
+            # 根据缩放比例调整水印位置
+            watermark_x = int(self.main_window.watermark_position.x() * scale_x)
+            watermark_y = int(self.main_window.watermark_position.y() * scale_y)
+        else:
+            # 如果无法获取预览尺寸，使用原始位置
+            watermark_x = self.main_window.watermark_position.x()
+            watermark_y = self.main_window.watermark_position.y()
+        
         # 创建一个新的QPixmap用于绘制水印
         result_pixmap = QPixmap(pixmap)
         painter = QPainter(result_pixmap)
         
-        # 设置字体和颜色
-        font = QFont("Arial", 20, QFont.Weight.Bold)
+        # 设置字体和颜色（需要根据原始图片尺寸调整字体大小）
+        if current_preview_pixmap and not current_preview_pixmap.isNull():
+            # 根据缩放比例调整字体大小
+            font_size = int(20 * max(scale_x, scale_y))
+        else:
+            font_size = 20
+            
+        font = QFont("Arial", font_size, QFont.Weight.Bold)
         painter.setFont(font)
+        painter.setPen(QColor(0, 0, 0))  # 设置黑色文本
         
         # 设置透明度
         painter.setOpacity(self.main_window.watermark_opacity / 100.0)
         
         # 绘制水印文本
-        painter.drawText(
-            self.main_window.watermark_position.x(), 
-            self.main_window.watermark_position.y(), 
-            self.main_window.watermark_text
-        )
+        painter.drawText(watermark_x, watermark_y, self.main_window.watermark_text)
         
         painter.end()
         
@@ -129,6 +149,7 @@ class WatermarkHandler:
         # 设置字体和颜色
         font = QFont("Arial", 20, QFont.Weight.Bold)
         painter.setFont(font)
+        painter.setPen(QColor(0, 0, 0))  # 设置黑色文本
         
         # 设置透明度
         painter.setOpacity(self.main_window.watermark_opacity / 100.0)
