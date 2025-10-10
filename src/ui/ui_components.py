@@ -11,10 +11,11 @@ from PyQt6.QtWidgets import (
     QLabel, QStatusBar, QMenuBar, QToolBar, 
     QListWidget, QSplitter, QLineEdit, QSlider, 
     QPushButton, QGridLayout, QGroupBox, QFileDialog,
-    QCheckBox, QSpinBox, QFrame
+    QCheckBox, QSpinBox, QFrame, QComboBox, QColorDialog,
+    QFontComboBox, QButtonGroup
 )
 from PyQt6.QtCore import Qt, QSize
-from PyQt6.QtGui import QAction
+from PyQt6.QtGui import QAction, QFont, QColor, QFontDatabase
 
 
 class UIComponents:
@@ -123,12 +124,12 @@ class UIComponents:
         text_group = QGroupBox()
         text_group.setStyleSheet("QGroupBox { font-weight: bold; }")
         text_layout = QVBoxLayout()
-        text_layout.setSpacing(10)
+        text_layout.setSpacing(8)
         
         # 文本输入
         text_input_layout = QHBoxLayout()
         text_label = QLabel("水印文本:")
-        text_label.setFixedWidth(70)
+        text_label.setFixedWidth(60)
         text_label.setStyleSheet("QLabel { border: none; background: transparent; }")
         text_input_layout.addWidget(text_label)
         
@@ -136,9 +137,17 @@ class UIComponents:
         self.main_window.text_input.setStyleSheet(
             "QLineEdit { background-color: white; border: 1px solid #ccc; border-radius: 3px; padding: 3px; }"
         )
-        self.main_window.text_input.setMinimumWidth(150)
+        self.main_window.text_input.setMinimumWidth(120)
         text_input_layout.addWidget(self.main_window.text_input)
         text_layout.addLayout(text_input_layout)
+        
+        # 字体设置区域
+        font_layout = self._create_font_layout()
+        text_layout.addLayout(font_layout)
+        
+        # 颜色和样式设置
+        color_style_layout = self._create_color_style_layout()
+        text_layout.addLayout(color_style_layout)
         
         # 透明度调节
         opacity_layout = self._create_opacity_layout()
@@ -147,11 +156,244 @@ class UIComponents:
         text_group.setLayout(text_layout)
         return text_group
     
+    def _create_font_layout(self):
+        """创建字体设置布局"""
+        font_main_layout = QVBoxLayout()
+        font_main_layout.setSpacing(5)
+        
+        # 字体选择行
+        font_row_layout = QHBoxLayout()
+        font_label = QLabel("字体:")
+        font_label.setFixedWidth(60)
+        font_label.setStyleSheet("QLabel { border: none; background: transparent; }")
+        font_row_layout.addWidget(font_label)
+        
+        self.main_window.font_combo = QFontComboBox()
+        self.main_window.font_combo.setCurrentFont(QFont("Arial"))
+        self.main_window.font_combo.setStyleSheet("""
+            QFontComboBox {
+                background-color: white;
+                border: 1px solid #ccc;
+                border-radius: 3px;
+                padding: 2px;
+                min-width: 80px;
+            }
+        """)
+        font_row_layout.addWidget(self.main_window.font_combo)
+        font_main_layout.addLayout(font_row_layout)
+        
+        # 字号和样式行
+        size_style_layout = QHBoxLayout()
+        size_label = QLabel("字号:")
+        size_label.setFixedWidth(60)
+        size_label.setStyleSheet("QLabel { border: none; background: transparent; }")
+        size_style_layout.addWidget(size_label)
+        
+        self.main_window.font_size_spin = QSpinBox()
+        self.main_window.font_size_spin.setRange(8, 200)
+        self.main_window.font_size_spin.setValue(18)
+        self.main_window.font_size_spin.setFixedWidth(70)  # 增加宽度从50到70
+        self.main_window.font_size_spin.setStyleSheet("""
+            QSpinBox {
+                background-color: white;
+                border: 1px solid #ccc;
+                border-radius: 3px;
+                padding: 2px;
+            }
+            QSpinBox::up-button {
+                subcontrol-origin: border;
+                subcontrol-position: top right;
+                width: 16px;
+                border-left: 1px solid #ccc;
+                border-bottom: 1px solid #ccc;
+                border-top-right-radius: 3px;
+                background-color: #f0f0f0;
+            }
+            QSpinBox::up-button:hover {
+                background-color: #e0e0e0;
+            }
+            QSpinBox::up-button:pressed {
+                background-color: #d0d0d0;
+            }
+            QSpinBox::down-button {
+                subcontrol-origin: border;
+                subcontrol-position: bottom right;
+                width: 16px;
+                border-left: 1px solid #ccc;
+                border-top: 1px solid #ccc;
+                border-bottom-right-radius: 3px;
+                background-color: #f0f0f0;
+            }
+            QSpinBox::down-button:hover {
+                background-color: #e0e0e0;
+            }
+            QSpinBox::down-button:pressed {
+                background-color: #d0d0d0;
+            }
+            QSpinBox::up-arrow {
+                image: none;
+                border-left: 4px solid transparent;
+                border-right: 4px solid transparent;
+                border-bottom: 4px solid #666;
+                width: 0px;
+                height: 0px;
+            }
+            QSpinBox::down-arrow {
+                image: none;
+                border-left: 4px solid transparent;
+                border-right: 4px solid transparent;
+                border-top: 4px solid #666;
+                width: 0px;
+                height: 0px;
+            }
+        """)
+        size_style_layout.addWidget(self.main_window.font_size_spin)
+        
+        # 添加间距
+        size_style_layout.addSpacing(20)
+        
+        # 粗体复选框
+        self.main_window.bold_checkbox = QCheckBox("粗体")
+        self.main_window.bold_checkbox.setStyleSheet("""
+            QCheckBox {
+                border: none;
+                background: transparent;
+                font-size: 14px;
+                font-weight: bold;
+                spacing: 3px;
+            }
+            QCheckBox::indicator {
+                width: 12px;
+                height: 12px;
+                border: 1px solid #ccc;
+                border-radius: 2px;
+                background-color: white;
+            }
+            QCheckBox::indicator:checked {
+                background-color: #4CAF50;
+                border: 1px solid #4CAF50;
+            }
+        """)
+        size_style_layout.addWidget(self.main_window.bold_checkbox)
+        
+        # 斜体复选框
+        self.main_window.italic_checkbox = QCheckBox("斜体")
+        self.main_window.italic_checkbox.setStyleSheet("""
+            QCheckBox {
+                border: none;
+                background: transparent;
+                font-size: 14px;
+                font-style: italic;
+                spacing: 3px;
+            }
+            QCheckBox::indicator {
+                width: 12px;
+                height: 12px;
+                border: 1px solid #ccc;
+                border-radius: 2px;
+                background-color: white;
+            }
+            QCheckBox::indicator:checked {
+                background-color: #4CAF50;
+                border: 1px solid #4CAF50;
+            }
+        """)
+        size_style_layout.addWidget(self.main_window.italic_checkbox)
+        
+        font_main_layout.addLayout(size_style_layout)
+        return font_main_layout
+    
+    def _create_color_style_layout(self):
+        """创建颜色和样式设置布局"""
+        color_style_layout = QVBoxLayout()
+        color_style_layout.setSpacing(5)
+        
+        # 颜色选择行
+        color_row_layout = QHBoxLayout()
+        color_label = QLabel("颜色:")
+        color_label.setFixedWidth(60)
+        color_label.setStyleSheet("QLabel { border: none; background: transparent; }")
+        color_row_layout.addWidget(color_label)
+        
+        self.main_window.color_button = QPushButton()
+        self.main_window.color_button.setFixedSize(30, 25)
+        self.main_window.color_button.setStyleSheet("""
+            QPushButton {
+                background-color: #000000;
+                border: 1px solid #ccc;
+                border-radius: 3px;
+            }
+            QPushButton:hover {
+                border: 2px solid #666;
+            }
+        """)
+        color_row_layout.addWidget(self.main_window.color_button)
+        
+        # 增加颜色和效果之间的间距
+        color_row_layout.addSpacing(60)
+        
+        # # 样式效果标签
+        # style_label = QLabel("效果:")
+        # style_label.setStyleSheet("QLabel { border: none; background: transparent; }")
+        # color_row_layout.addWidget(style_label)
+        
+        # # 在"效果"和"阴影"之间添加小间距
+        # color_row_layout.addSpacing(5)
+        
+        # 阴影复选框
+        self.main_window.shadow_checkbox = QCheckBox("阴影")
+        self.main_window.shadow_checkbox.setStyleSheet("""
+            QCheckBox {
+                border: none;
+                background: transparent;
+                font-size: 14px;
+                spacing: 3px;
+            }
+            QCheckBox::indicator {
+                width: 12px;
+                height: 12px;
+                border: 1px solid #ccc;
+                border-radius: 2px;
+                background-color: white;
+            }
+            QCheckBox::indicator:checked {
+                background-color: #4CAF50;
+                border: 1px solid #4CAF50;
+            }
+        """)
+        color_row_layout.addWidget(self.main_window.shadow_checkbox)
+        
+        # 描边复选框
+        self.main_window.stroke_checkbox = QCheckBox("描边")
+        self.main_window.stroke_checkbox.setStyleSheet("""
+            QCheckBox {
+                border: none;
+                background: transparent;
+                font-size: 14px;
+                spacing: 3px;
+            }
+            QCheckBox::indicator {
+                width: 12px;
+                height: 12px;
+                border: 1px solid #ccc;
+                border-radius: 2px;
+                background-color: white;
+            }
+            QCheckBox::indicator:checked {
+                background-color: #4CAF50;
+                border: 1px solid #4CAF50;
+            }
+        """)
+        color_row_layout.addWidget(self.main_window.stroke_checkbox)
+        
+        color_style_layout.addLayout(color_row_layout)
+        return color_style_layout
+    
     def _create_opacity_layout(self):
         """创建透明度调节布局"""
         opacity_layout = QHBoxLayout()
         opacity_label = QLabel("透明度:")
-        opacity_label.setFixedWidth(70)
+        opacity_label.setFixedWidth(60)
         opacity_label.setStyleSheet("QLabel { border: none; background: transparent; }")
         opacity_layout.addWidget(opacity_label)
         
@@ -432,6 +674,52 @@ class UIComponents:
                 border-radius: 3px;
                 padding: 2px;
             }
+            QSpinBox::up-button {
+                subcontrol-origin: border;
+                subcontrol-position: top right;
+                width: 16px;
+                border-left: 1px solid #ccc;
+                border-bottom: 1px solid #ccc;
+                border-top-right-radius: 3px;
+                background-color: #f0f0f0;
+            }
+            QSpinBox::up-button:hover {
+                background-color: #e0e0e0;
+            }
+            QSpinBox::up-button:pressed {
+                background-color: #d0d0d0;
+            }
+            QSpinBox::down-button {
+                subcontrol-origin: border;
+                subcontrol-position: bottom right;
+                width: 16px;
+                border-left: 1px solid #ccc;
+                border-top: 1px solid #ccc;
+                border-bottom-right-radius: 3px;
+                background-color: #f0f0f0;
+            }
+            QSpinBox::down-button:hover {
+                background-color: #e0e0e0;
+            }
+            QSpinBox::down-button:pressed {
+                background-color: #d0d0d0;
+            }
+            QSpinBox::up-arrow {
+                image: none;
+                border-left: 4px solid transparent;
+                border-right: 4px solid transparent;
+                border-bottom: 4px solid #666;
+                width: 0px;
+                height: 0px;
+            }
+            QSpinBox::down-arrow {
+                image: none;
+                border-left: 4px solid transparent;
+                border-right: 4px solid transparent;
+                border-top: 4px solid #666;
+                width: 0px;
+                height: 0px;
+            }
         """)
         size_control_layout.addWidget(self.main_window.image_width_spin)
         
@@ -451,6 +739,52 @@ class UIComponents:
                 border: 1px solid #ccc;
                 border-radius: 3px;
                 padding: 2px;
+            }
+            QSpinBox::up-button {
+                subcontrol-origin: border;
+                subcontrol-position: top right;
+                width: 16px;
+                border-left: 1px solid #ccc;
+                border-bottom: 1px solid #ccc;
+                border-top-right-radius: 3px;
+                background-color: #f0f0f0;
+            }
+            QSpinBox::up-button:hover {
+                background-color: #e0e0e0;
+            }
+            QSpinBox::up-button:pressed {
+                background-color: #d0d0d0;
+            }
+            QSpinBox::down-button {
+                subcontrol-origin: border;
+                subcontrol-position: bottom right;
+                width: 16px;
+                border-left: 1px solid #ccc;
+                border-top: 1px solid #ccc;
+                border-bottom-right-radius: 3px;
+                background-color: #f0f0f0;
+            }
+            QSpinBox::down-button:hover {
+                background-color: #e0e0e0;
+            }
+            QSpinBox::down-button:pressed {
+                background-color: #d0d0d0;
+            }
+            QSpinBox::up-arrow {
+                image: none;
+                border-left: 4px solid transparent;
+                border-right: 4px solid transparent;
+                border-bottom: 4px solid #666;
+                width: 0px;
+                height: 0px;
+            }
+            QSpinBox::down-arrow {
+                image: none;
+                border-left: 4px solid transparent;
+                border-right: 4px solid transparent;
+                border-top: 4px solid #666;
+                width: 0px;
+                height: 0px;
             }
         """)
         size_control_layout.addWidget(self.main_window.image_height_spin)

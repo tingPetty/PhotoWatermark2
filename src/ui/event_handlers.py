@@ -7,9 +7,9 @@
 """
 
 import os
-from PyQt6.QtWidgets import QListWidget, QMessageBox, QWidget, QPushButton, QFileDialog
+from PyQt6.QtWidgets import QListWidget, QMessageBox, QWidget, QPushButton, QFileDialog, QColorDialog
 from PyQt6.QtCore import Qt, QPoint, QRect
-from PyQt6.QtGui import QDragEnterEvent, QDropEvent, QFont, QFontMetrics, QPixmap
+from PyQt6.QtGui import QDragEnterEvent, QDropEvent, QFont, QFontMetrics, QPixmap, QColor
 
 from core.image_processor import ImageProcessor
 
@@ -34,6 +34,9 @@ class EventHandlers:
         # 水印设置事件
         self.main_window.text_input.textChanged.connect(self._update_watermark_text)
         self.main_window.opacity_slider.valueChanged.connect(self._update_watermark_opacity)
+        
+        # 新的文本水印功能事件
+        self._setup_text_watermark_events()
         
         # 图片水印事件
         self._setup_image_watermark_events()
@@ -91,6 +94,90 @@ class EventHandlers:
         """更新水印透明度"""
         self.main_window.watermark_opacity = value
         self.main_window.opacity_value.setText(f"{value}%")
+        self.main_window.watermark_handler.update_preview()
+    
+    def _setup_text_watermark_events(self):
+        """设置文本水印相关事件"""
+        # 字体选择
+        if hasattr(self.main_window, 'font_combo'):
+            self.main_window.font_combo.currentFontChanged.connect(self._update_font)
+        
+        # 字号
+        if hasattr(self.main_window, 'font_size_spin'):
+            self.main_window.font_size_spin.valueChanged.connect(self._update_font_size)
+        
+        # 粗体和斜体
+        if hasattr(self.main_window, 'bold_checkbox'):
+            self.main_window.bold_checkbox.toggled.connect(self._update_font_style)
+        
+        if hasattr(self.main_window, 'italic_checkbox'):
+            self.main_window.italic_checkbox.toggled.connect(self._update_font_style)
+        
+        # 颜色选择
+        if hasattr(self.main_window, 'color_button'):
+            self.main_window.color_button.clicked.connect(self._select_text_color)
+        
+        # 样式效果
+        if hasattr(self.main_window, 'shadow_checkbox'):
+            self.main_window.shadow_checkbox.toggled.connect(self._update_text_shadow)
+        
+        if hasattr(self.main_window, 'stroke_checkbox'):
+            self.main_window.stroke_checkbox.toggled.connect(self._update_text_stroke)
+    
+    def _update_font(self, font):
+        """更新字体"""
+        if not hasattr(self.main_window, 'text_font'):
+            self.main_window.text_font = QFont()
+        self.main_window.text_font.setFamily(font.family())
+        self.main_window.watermark_handler.update_preview()
+    
+    def _update_font_size(self, size):
+        """更新字号"""
+        if not hasattr(self.main_window, 'text_font'):
+            self.main_window.text_font = QFont()
+        self.main_window.text_font.setPointSize(size)
+        self.main_window.watermark_handler.update_preview()
+    
+    def _update_font_style(self):
+        """更新字体样式（粗体、斜体）"""
+        if not hasattr(self.main_window, 'text_font'):
+            self.main_window.text_font = QFont()
+        
+        bold = self.main_window.bold_checkbox.isChecked() if hasattr(self.main_window, 'bold_checkbox') else False
+        italic = self.main_window.italic_checkbox.isChecked() if hasattr(self.main_window, 'italic_checkbox') else False
+        
+        self.main_window.text_font.setBold(bold)
+        self.main_window.text_font.setItalic(italic)
+        self.main_window.watermark_handler.update_preview()
+    
+    def _select_text_color(self):
+        """选择文本颜色"""
+        current_color = getattr(self.main_window, 'text_color', QColor(0, 0, 0))
+        color = QColorDialog.getColor(current_color, self.main_window, "选择文本颜色")
+        
+        if color.isValid():
+            self.main_window.text_color = color
+            # 更新颜色按钮的背景色
+            self.main_window.color_button.setStyleSheet(f"""
+                QPushButton {{
+                    background-color: {color.name()};
+                    border: 1px solid #ccc;
+                    border-radius: 3px;
+                }}
+                QPushButton:hover {{
+                    border: 2px solid #666;
+                }}
+            """)
+            self.main_window.watermark_handler.update_preview()
+    
+    def _update_text_shadow(self, enabled):
+        """更新文本阴影效果"""
+        self.main_window.text_shadow = enabled
+        self.main_window.watermark_handler.update_preview()
+    
+    def _update_text_stroke(self, enabled):
+        """更新文本描边效果"""
+        self.main_window.text_stroke = enabled
         self.main_window.watermark_handler.update_preview()
     
     def _setup_image_watermark_events(self):

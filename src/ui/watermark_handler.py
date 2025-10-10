@@ -7,7 +7,7 @@
 """
 
 from PyQt6.QtCore import Qt, QPoint
-from PyQt6.QtGui import QPixmap, QFont, QColor, QPainter
+from PyQt6.QtGui import QPixmap, QFont, QColor, QPainter, QPen
 import os
 
 from core.image_processor import ImageProcessor
@@ -59,20 +59,7 @@ class WatermarkHandler:
         
         # 绘制文本水印
         if self.main_window.watermark_text:
-            # 设置字体和颜色
-            font = QFont("Arial", 20, QFont.Weight.Bold)
-            painter.setFont(font)
-            painter.setPen(QColor(0, 0, 0))  # 设置黑色文本
-            
-            # 设置透明度
-            painter.setOpacity(self.main_window.watermark_opacity / 100.0)
-            
-            # 绘制水印文本
-            painter.drawText(
-                self.main_window.watermark_position.x(), 
-                self.main_window.watermark_position.y(), 
-                self.main_window.watermark_text
-            )
+            self._draw_text_watermark(painter)
         
         # 绘制图片水印
         if hasattr(self.main_window, 'image_watermark_enabled') and self.main_window.image_watermark_enabled:
@@ -116,22 +103,14 @@ class WatermarkHandler:
         
         # 绘制文本水印
         if self.main_window.watermark_text:
-            # 设置字体和颜色（需要根据原始图片尺寸调整字体大小）
             if current_preview_pixmap and not current_preview_pixmap.isNull():
-                # 根据缩放比例调整字体大小
-                font_size = int(20 * max(scale_x, scale_y))
+                self._draw_text_watermark_scaled(painter, watermark_x, watermark_y, scale_x, scale_y)
             else:
-                font_size = 20
-                
-            font = QFont("Arial", font_size, QFont.Weight.Bold)
-            painter.setFont(font)
-            painter.setPen(QColor(0, 0, 0))  # 设置黑色文本
-            
-            # 设置透明度
-            painter.setOpacity(self.main_window.watermark_opacity / 100.0)
-            
-            # 绘制水印文本
-            painter.drawText(watermark_x, watermark_y, self.main_window.watermark_text)
+                # 保存原始位置，临时设置新位置
+                original_pos = self.main_window.watermark_position
+                self.main_window.watermark_position = QPoint(watermark_x, watermark_y)
+                self._draw_text_watermark(painter)
+                self.main_window.watermark_position = original_pos
         
         # 绘制图片水印
         if hasattr(self.main_window, 'image_watermark_enabled') and self.main_window.image_watermark_enabled:
@@ -251,6 +230,74 @@ class WatermarkHandler:
         
         # 恢复透明度
         painter.setOpacity(1.0)
+    
+    def _draw_text_watermark(self, painter):
+        """绘制文本水印，支持字体、颜色和样式效果"""
+        # 设置字体
+        painter.setFont(self.main_window.text_font)
+        
+        # 设置透明度
+        painter.setOpacity(self.main_window.watermark_opacity / 100.0)
+        
+        # 获取文本位置
+        x = self.main_window.watermark_position.x()
+        y = self.main_window.watermark_position.y()
+        text = self.main_window.watermark_text
+        
+        # 根据样式效果绘制文本
+        # 先绘制阴影效果（如果启用）
+        if hasattr(self.main_window, 'text_shadow') and self.main_window.text_shadow:
+            shadow_color = QColor(128, 128, 128, 180)  # 半透明灰色阴影
+            painter.setPen(shadow_color)
+            painter.drawText(x + 2, y + 2, text)  # 阴影偏移2像素
+        
+        # 再绘制描边效果（如果启用）
+        if hasattr(self.main_window, 'text_stroke') and self.main_window.text_stroke:
+            stroke_pen = QPen(QColor(255, 255, 255), 2)  # 白色描边，2像素宽度
+            painter.setPen(stroke_pen)
+            painter.drawText(x, y, text)
+        
+        # 最后绘制主文本
+        painter.setPen(self.main_window.text_color)
+        painter.drawText(x, y, text)
+    
+    def _draw_text_watermark_scaled(self, painter, x, y, scale_x, scale_y):
+        """绘制缩放后的文本水印（用于导出）"""
+        # 创建缩放后的字体
+        scaled_font = QFont(self.main_window.text_font)
+        original_size = self.main_window.text_font.pointSize()
+        scaled_size = int(original_size * max(scale_x, scale_y))
+        scaled_font.setPointSize(scaled_size)
+        
+        # 设置字体
+        painter.setFont(scaled_font)
+        
+        # 设置透明度
+        painter.setOpacity(self.main_window.watermark_opacity / 100.0)
+        
+        # 获取文本
+        text = self.main_window.watermark_text
+        
+        # 根据样式效果绘制文本
+        # 先绘制阴影效果（如果启用）
+        if hasattr(self.main_window, 'text_shadow') and self.main_window.text_shadow:
+            # 绘制阴影效果（阴影偏移也需要缩放）
+            shadow_offset = int(2 * max(scale_x, scale_y))
+            shadow_color = QColor(128, 128, 128, 180)
+            painter.setPen(shadow_color)
+            painter.drawText(x + shadow_offset, y + shadow_offset, text)
+        
+        # 再绘制描边效果（如果启用）
+        if hasattr(self.main_window, 'text_stroke') and self.main_window.text_stroke:
+            # 绘制描边效果（描边宽度也需要缩放）
+            stroke_width = int(2 * max(scale_x, scale_y))
+            stroke_pen = QPen(QColor(255, 255, 255), stroke_width)
+            painter.setPen(stroke_pen)
+            painter.drawText(x, y, text)
+        
+        # 最后绘制主文本
+        painter.setPen(self.main_window.text_color)
+        painter.drawText(x, y, text)
     
     def _draw_image_watermark_scaled(self, painter, canvas_size, scale_x, scale_y):
         """绘制缩放后的图片水印（用于导出）"""

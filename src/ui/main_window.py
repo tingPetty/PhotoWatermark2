@@ -37,6 +37,13 @@ class MainWindow(QMainWindow):
         self.watermark_position = QPoint(50, 50)  # 默认位置
         self.is_dragging = False  # 是否正在拖拽水印
         
+        # 新的文本水印属性
+        from PyQt6.QtGui import QFont, QColor
+        self.text_font = QFont("Arial", 24)  # 默认字体
+        self.text_color = QColor(0, 0, 0)  # 默认黑色
+        self.text_shadow = False  # 阴影效果
+        self.text_stroke = False  # 描边效果
+        
         # 图片水印数据
         self.image_watermark_enabled = False  # 是否启用图片水印
         self.watermark_image_path = ""  # 水印图片路径
