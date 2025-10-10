@@ -37,6 +37,16 @@ class MainWindow(QMainWindow):
         self.watermark_position = QPoint(50, 50)  # 默认位置
         self.is_dragging = False  # 是否正在拖拽水印
         
+        # 图片水印数据
+        self.image_watermark_enabled = False  # 是否启用图片水印
+        self.watermark_image_path = ""  # 水印图片路径
+        self.watermark_image = None  # 水印图片QPixmap对象
+        self.image_watermark_width = 100  # 图片水印宽度
+        self.image_watermark_height = 100  # 图片水印高度
+        self.image_watermark_opacity = 80  # 图片水印透明度 (0-100)
+        self.proportional_scale_enabled = False  # 是否启用比例缩放，默认关闭
+        self.image_watermark_position = QPoint(10, 10)  # 图片水印位置
+        
         # 初始化组件管理器
         self.ui_components = UIComponents(self)
         self.watermark_handler = WatermarkHandler(self)
@@ -65,6 +75,9 @@ class MainWindow(QMainWindow):
         
         # 设置事件处理
         self.event_handlers.setup_event_connections()
+        
+        # 初始化图片水印控件状态（默认禁用）
+        self.ui_components.set_image_watermark_controls_enabled(False)
     
     def dragEnterEvent(self, event: QDragEnterEvent):
         """拖拽进入事件"""

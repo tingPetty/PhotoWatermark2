@@ -10,7 +10,8 @@ from PyQt6.QtWidgets import (
     QWidget, QVBoxLayout, QHBoxLayout, 
     QLabel, QStatusBar, QMenuBar, QToolBar, 
     QListWidget, QSplitter, QLineEdit, QSlider, 
-    QPushButton, QGridLayout, QGroupBox
+    QPushButton, QGridLayout, QGroupBox, QFileDialog,
+    QCheckBox, QSpinBox, QFrame
 )
 from PyQt6.QtCore import Qt, QSize
 from PyQt6.QtGui import QAction
@@ -240,11 +241,263 @@ class UIComponents:
         return grid_layout
     
     def _create_right_watermark_area(self):
-        """创建右侧水印区域（预留空间）"""
+        """创建右侧水印区域（图片水印功能）"""
         right_watermark_area = QWidget()
         right_watermark_layout = QVBoxLayout(right_watermark_area)
+        right_watermark_layout.setContentsMargins(5, 5, 5, 5)
+        
+        # 图片水印设置组
+        image_group = self._create_image_watermark_group()
+        right_watermark_layout.addWidget(image_group)
+        
+        # 添加弹性空间
         right_watermark_layout.addStretch(1)
+        
         return right_watermark_area
+    
+    def _create_image_watermark_group(self):
+        """创建图片水印设置组"""
+        # 创建一个普通的Widget而不是QGroupBox，去掉标题和边框
+        image_widget = QWidget()
+        image_layout = QVBoxLayout()
+        image_layout.setSpacing(10)
+        
+        # 启用图片水印复选框
+        self.main_window.enable_image_watermark = QCheckBox("启用图片水印")
+        self.main_window.enable_image_watermark.setChecked(False)  # 默认不选中
+        self.main_window.enable_image_watermark.setStyleSheet("""
+            QCheckBox {
+                border: none;
+                background: transparent;
+                font-size: 12px;
+                spacing: 5px;
+            }
+            QCheckBox::indicator {
+                width: 14px;
+                height: 14px;
+                border: 2px solid #ccc;
+                border-radius: 3px;
+                background-color: white;
+            }
+            QCheckBox::indicator:checked {
+                background-color: #4CAF50;
+                border: 2px solid #4CAF50;
+                image: url(data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iMTIiIGhlaWdodD0iMTIiIHZpZXdCb3g9IjAgMCAxMiAxMiIgZmlsbD0ibm9uZSIgeG1sbnM9Imh0dHA6Ly93d3cudzMub3JnLzIwMDAvc3ZnIj4KPHBhdGggZD0iTTEwIDNMNC41IDguNUwyIDYiIHN0cm9rZT0id2hpdGUiIHN0cm9rZS13aWR0aD0iMiIgc3Ryb2tlLWxpbmVjYXA9InJvdW5kIiBzdHJva2UtbGluZWpvaW49InJvdW5kIi8+Cjwvc3ZnPgo=);
+            }
+            QCheckBox::indicator:hover {
+                border: 2px solid #81C784;
+            }
+        """)
+        image_layout.addWidget(self.main_window.enable_image_watermark)
+        
+        # 图片选择区域
+        image_select_layout = self._create_image_select_layout()
+        image_layout.addLayout(image_select_layout)
+        
+        # 图片预览区域
+        self.main_window.image_preview = self._create_image_preview()
+        image_layout.addWidget(self.main_window.image_preview)
+        
+        # 缩放控制
+        scale_layout = self._create_scale_layout()
+        image_layout.addLayout(scale_layout)
+        
+        # 图片水印透明度调节
+        image_opacity_layout = self._create_image_opacity_layout()
+        image_layout.addLayout(image_opacity_layout)
+        
+        image_widget.setLayout(image_layout)
+        return image_widget
+    
+    def _create_image_select_layout(self):
+        """创建图片选择布局"""
+        image_select_layout = QHBoxLayout()
+        
+        select_label = QLabel("选择图片:")
+        select_label.setFixedWidth(70)
+        select_label.setStyleSheet("QLabel { border: none; background: transparent; }")
+        image_select_layout.addWidget(select_label)
+        
+        self.main_window.select_image_btn = QPushButton("浏览...")
+        self.main_window.select_image_btn.setFixedWidth(80)
+        self.main_window.select_image_btn.setStyleSheet("""
+            QPushButton {
+                background-color: #2196F3;
+                color: white;
+                border: none;
+                border-radius: 3px;
+                padding: 5px;
+            }
+            QPushButton:hover {
+                background-color: #1976D2;
+            }
+            QPushButton:pressed {
+                background-color: #0D47A1;
+            }
+        """)
+        image_select_layout.addWidget(self.main_window.select_image_btn)
+        
+        self.main_window.image_path_label = QLabel("未选择图片")
+        self.main_window.image_path_label.setStyleSheet(
+            "QLabel { border: none; background: transparent; color: #666; }"
+        )
+        image_select_layout.addWidget(self.main_window.image_path_label)
+        
+        image_select_layout.addStretch(1)
+        
+        return image_select_layout
+    
+    def _create_image_preview(self):
+        """创建图片预览区域"""
+        preview_frame = QFrame()
+        preview_frame.setFixedHeight(80)
+        preview_frame.setStyleSheet("""
+            QFrame {
+                background-color: white;
+                border: 1px solid #ddd;
+                border-radius: 3px;
+            }
+        """)
+        
+        preview_layout = QVBoxLayout(preview_frame)
+        preview_layout.setContentsMargins(5, 5, 5, 5)
+        
+        self.main_window.image_preview_label = QLabel("图片预览")
+        self.main_window.image_preview_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        self.main_window.image_preview_label.setStyleSheet(
+            "QLabel { border: none; background: transparent; color: #999; }"
+        )
+        preview_layout.addWidget(self.main_window.image_preview_label)
+        
+        return preview_frame
+    
+    def _create_scale_layout(self):
+        """创建缩放控制布局"""
+        scale_layout = QVBoxLayout()
+        
+        # 缩放模式选择
+        scale_mode_layout = QHBoxLayout()
+        scale_mode_label = QLabel("缩放模式:")
+        scale_mode_label.setFixedWidth(70)
+        scale_mode_label.setStyleSheet("QLabel { border: none; background: transparent; }")
+        scale_mode_layout.addWidget(scale_mode_label)
+        
+        self.main_window.proportional_scale = QCheckBox("保持比例")
+        self.main_window.proportional_scale.setChecked(False)  # 默认不选中，让用户自己选择
+        self.main_window.proportional_scale.setStyleSheet("""
+            QCheckBox {
+                border: none;
+                background: transparent;
+                font-size: 12px;
+                spacing: 5px;
+            }
+            QCheckBox::indicator {
+                width: 12px;
+                height: 12px;
+                border: 2px solid #ccc;
+                border-radius: 3px;
+                background-color: white;
+            }
+            QCheckBox::indicator:checked {
+                background-color: #4CAF50;
+                border: 2px solid #4CAF50;
+                image: url(data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iMTIiIGhlaWdodD0iMTIiIHZpZXdCb3g9IjAgMCAxMiAxMiIgZmlsbD0ibm9uZSIgeG1sbnM9Imh0dHA6Ly93d3cudzMub3JnLzIwMDAvc3ZnIj4KPHBhdGggZD0iTTEwIDNMNC41IDguNUwyIDYiIHN0cm9rZT0id2hpdGUiIHN0cm9rZS13aWR0aD0iMiIgc3Ryb2tlLWxpbmVjYXA9InJvdW5kIiBzdHJva2UtbGluZWpvaW49InJvdW5kIi8+Cjwvc3ZnPgo=);
+            }
+            QCheckBox::indicator:hover {
+                border: 2px solid #81C784;
+            }
+        """)
+        scale_mode_layout.addWidget(self.main_window.proportional_scale)
+        
+        scale_mode_layout.addStretch(1)
+        scale_layout.addLayout(scale_mode_layout)
+        
+        # 缩放大小控制
+        size_control_layout = QHBoxLayout()
+        
+        # 宽度控制
+        width_label = QLabel("宽度:")
+        width_label.setFixedWidth(35)
+        width_label.setStyleSheet("QLabel { border: none; background: transparent; }")
+        size_control_layout.addWidget(width_label)
+        
+        self.main_window.image_width_spin = QSpinBox()
+        self.main_window.image_width_spin.setRange(10, 1000)
+        self.main_window.image_width_spin.setValue(100)
+        self.main_window.image_width_spin.setSuffix("px")
+        self.main_window.image_width_spin.setStyleSheet("""
+            QSpinBox {
+                background-color: white;
+                border: 1px solid #ccc;
+                border-radius: 3px;
+                padding: 2px;
+            }
+        """)
+        size_control_layout.addWidget(self.main_window.image_width_spin)
+        
+        # 高度控制
+        height_label = QLabel("高度:")
+        height_label.setFixedWidth(35)
+        height_label.setStyleSheet("QLabel { border: none; background: transparent; }")
+        size_control_layout.addWidget(height_label)
+        
+        self.main_window.image_height_spin = QSpinBox()
+        self.main_window.image_height_spin.setRange(10, 1000)
+        self.main_window.image_height_spin.setValue(100)
+        self.main_window.image_height_spin.setSuffix("px")
+        self.main_window.image_height_spin.setStyleSheet("""
+            QSpinBox {
+                background-color: white;
+                border: 1px solid #ccc;
+                border-radius: 3px;
+                padding: 2px;
+            }
+        """)
+        size_control_layout.addWidget(self.main_window.image_height_spin)
+        
+        size_control_layout.addStretch(1)
+        scale_layout.addLayout(size_control_layout)
+        
+        return scale_layout
+    
+    def _create_image_opacity_layout(self):
+        """创建图片水印透明度调节布局"""
+        image_opacity_layout = QHBoxLayout()
+        
+        opacity_label = QLabel("透明度:")
+        opacity_label.setFixedWidth(70)
+        opacity_label.setStyleSheet("QLabel { border: none; background: transparent; }")
+        image_opacity_layout.addWidget(opacity_label)
+        
+        self.main_window.image_opacity_slider = QSlider(Qt.Orientation.Horizontal)
+        self.main_window.image_opacity_slider.setStyleSheet("""
+            QSlider {
+                border: none;
+                background: transparent;
+            }
+            QSlider::groove:horizontal {
+                background: #e0e0e0;
+                height: 8px;
+                border-radius: 4px;
+                border: none;
+            }
+            QSlider::handle:horizontal {
+                background: #4CAF50;
+                width: 16px;
+                margin: -4px 0;
+                border-radius: 8px;
+                border: none;
+            }
+        """)
+        self.main_window.image_opacity_slider.setRange(0, 100)
+        self.main_window.image_opacity_slider.setValue(80)
+        image_opacity_layout.addWidget(self.main_window.image_opacity_slider)
+        
+        self.main_window.image_opacity_value = QLabel("80%")
+        self.main_window.image_opacity_value.setFixedWidth(40)
+        image_opacity_layout.addWidget(self.main_window.image_opacity_value)
+        
+        return image_opacity_layout
     
     def create_menu_bar(self):
         """创建菜单栏"""
@@ -345,3 +598,46 @@ class UIComponents:
         status_bar.addWidget(self.main_window.status_label)
         
         return status_bar
+    
+    def set_image_watermark_controls_enabled(self, enabled):
+        """设置图片水印相关控件的启用状态"""
+        # 图片选择按钮
+        if hasattr(self.main_window, 'select_image_btn'):
+            self.main_window.select_image_btn.setEnabled(enabled)
+        
+        # 图片预览标签
+        if hasattr(self.main_window, 'image_preview_label'):
+            self.main_window.image_preview_label.setEnabled(enabled)
+        
+        # 保持比例复选框
+        if hasattr(self.main_window, 'proportional_scale'):
+            self.main_window.proportional_scale.setEnabled(enabled)
+        
+        # 宽度和高度输入框
+        if hasattr(self.main_window, 'image_width_spin'):
+            self.main_window.image_width_spin.setEnabled(enabled)
+        if hasattr(self.main_window, 'image_height_spin'):
+            self.main_window.image_height_spin.setEnabled(enabled)
+        
+        # 透明度滑块
+        if hasattr(self.main_window, 'image_opacity_slider'):
+            self.main_window.image_opacity_slider.setEnabled(enabled)
+        
+        # 设置控件的视觉效果（灰色蒙版效果）
+        opacity = 1.0 if enabled else 0.4
+        
+        controls = [
+            getattr(self.main_window, 'select_image_btn', None),
+            getattr(self.main_window, 'image_preview_label', None),
+            getattr(self.main_window, 'proportional_scale', None),
+            getattr(self.main_window, 'image_width_spin', None),
+            getattr(self.main_window, 'image_height_spin', None),
+            getattr(self.main_window, 'image_opacity_slider', None)
+        ]
+        
+        for control in controls:
+            if control is not None:
+                control.setStyleSheet(f"""
+                    {control.styleSheet()}
+                    opacity: {opacity};
+                """)

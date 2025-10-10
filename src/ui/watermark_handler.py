@@ -6,8 +6,9 @@
 负责水印的渲染和相关逻辑
 """
 
-from PyQt6.QtCore import Qt
+from PyQt6.QtCore import Qt, QPoint
 from PyQt6.QtGui import QPixmap, QFont, QColor, QPainter
+import os
 
 from core.image_processor import ImageProcessor
 
@@ -56,20 +57,27 @@ class WatermarkHandler:
         result_pixmap = QPixmap(scaled_pixmap)
         painter = QPainter(result_pixmap)
         
-        # 设置字体和颜色
-        font = QFont("Arial", 20, QFont.Weight.Bold)
-        painter.setFont(font)
-        painter.setPen(QColor(0, 0, 0))  # 设置黑色文本
+        # 绘制文本水印
+        if self.main_window.watermark_text:
+            # 设置字体和颜色
+            font = QFont("Arial", 20, QFont.Weight.Bold)
+            painter.setFont(font)
+            painter.setPen(QColor(0, 0, 0))  # 设置黑色文本
+            
+            # 设置透明度
+            painter.setOpacity(self.main_window.watermark_opacity / 100.0)
+            
+            # 绘制水印文本
+            painter.drawText(
+                self.main_window.watermark_position.x(), 
+                self.main_window.watermark_position.y(), 
+                self.main_window.watermark_text
+            )
         
-        # 设置透明度
-        painter.setOpacity(self.main_window.watermark_opacity / 100.0)
-        
-        # 绘制水印文本
-        painter.drawText(
-            self.main_window.watermark_position.x(), 
-            self.main_window.watermark_position.y(), 
-            self.main_window.watermark_text
-        )
+        # 绘制图片水印
+        if hasattr(self.main_window, 'image_watermark_enabled') and self.main_window.image_watermark_enabled:
+            if hasattr(self.main_window, 'watermark_image_path') and self.main_window.watermark_image_path:
+                self._draw_image_watermark(painter, scaled_pixmap.size())
         
         painter.end()
         
@@ -106,22 +114,33 @@ class WatermarkHandler:
         result_pixmap = QPixmap(pixmap)
         painter = QPainter(result_pixmap)
         
-        # 设置字体和颜色（需要根据原始图片尺寸调整字体大小）
-        if current_preview_pixmap and not current_preview_pixmap.isNull():
-            # 根据缩放比例调整字体大小
-            font_size = int(20 * max(scale_x, scale_y))
-        else:
-            font_size = 20
+        # 绘制文本水印
+        if self.main_window.watermark_text:
+            # 设置字体和颜色（需要根据原始图片尺寸调整字体大小）
+            if current_preview_pixmap and not current_preview_pixmap.isNull():
+                # 根据缩放比例调整字体大小
+                font_size = int(20 * max(scale_x, scale_y))
+            else:
+                font_size = 20
+                
+            font = QFont("Arial", font_size, QFont.Weight.Bold)
+            painter.setFont(font)
+            painter.setPen(QColor(0, 0, 0))  # 设置黑色文本
             
-        font = QFont("Arial", font_size, QFont.Weight.Bold)
-        painter.setFont(font)
-        painter.setPen(QColor(0, 0, 0))  # 设置黑色文本
+            # 设置透明度
+            painter.setOpacity(self.main_window.watermark_opacity / 100.0)
+            
+            # 绘制水印文本
+            painter.drawText(watermark_x, watermark_y, self.main_window.watermark_text)
         
-        # 设置透明度
-        painter.setOpacity(self.main_window.watermark_opacity / 100.0)
-        
-        # 绘制水印文本
-        painter.drawText(watermark_x, watermark_y, self.main_window.watermark_text)
+        # 绘制图片水印
+        if hasattr(self.main_window, 'image_watermark_enabled') and self.main_window.image_watermark_enabled:
+            if hasattr(self.main_window, 'watermark_image_path') and self.main_window.watermark_image_path:
+                # 计算图片水印的缩放比例
+                if current_preview_pixmap and not current_preview_pixmap.isNull():
+                    self._draw_image_watermark_scaled(painter, pixmap.size(), scale_x, scale_y)
+                else:
+                    self._draw_image_watermark(painter, pixmap.size())
         
         painter.end()
         
@@ -146,21 +165,150 @@ class WatermarkHandler:
         result_pixmap = QPixmap(pixmap)
         painter = QPainter(result_pixmap)
         
-        # 设置字体和颜色
-        font = QFont("Arial", 20, QFont.Weight.Bold)
-        painter.setFont(font)
-        painter.setPen(QColor(0, 0, 0))  # 设置黑色文本
+        # 绘制文本水印
+        if self.main_window.watermark_text:
+            # 设置字体和颜色
+            font = QFont("Arial", 20, QFont.Weight.Bold)
+            painter.setFont(font)
+            painter.setPen(QColor(0, 0, 0))  # 设置黑色文本
+            
+            # 设置透明度
+            painter.setOpacity(self.main_window.watermark_opacity / 100.0)
+            
+            # 绘制水印文本
+            painter.drawText(
+                self.main_window.watermark_position.x(), 
+                self.main_window.watermark_position.y(), 
+                self.main_window.watermark_text
+            )
         
-        # 设置透明度
-        painter.setOpacity(self.main_window.watermark_opacity / 100.0)
-        
-        # 绘制水印文本
-        painter.drawText(
-            self.main_window.watermark_position.x(), 
-            self.main_window.watermark_position.y(), 
-            self.main_window.watermark_text
-        )
+        # 绘制图片水印
+        if hasattr(self.main_window, 'image_watermark_enabled') and self.main_window.image_watermark_enabled:
+            if hasattr(self.main_window, 'watermark_image_path') and self.main_window.watermark_image_path:
+                self._draw_image_watermark(painter, pixmap.size())
         
         painter.end()
         
         return result_pixmap
+    
+    def _draw_image_watermark(self, painter, canvas_size):
+        """绘制图片水印"""
+        if not hasattr(self.main_window, 'watermark_image_path') or not self.main_window.watermark_image_path:
+            return
+            
+        if not os.path.exists(self.main_window.watermark_image_path):
+            return
+            
+        # 加载水印图片
+        watermark_pixmap = QPixmap(self.main_window.watermark_image_path)
+        if watermark_pixmap.isNull():
+            return
+            
+        # 获取缩放设置
+        if hasattr(self.main_window, 'image_watermark_width') and hasattr(self.main_window, 'image_watermark_height'):
+            target_width = self.main_window.image_watermark_width
+            target_height = self.main_window.image_watermark_height
+            
+            # 如果启用了比例缩放，保持宽高比
+            if hasattr(self.main_window, 'proportional_scale_enabled') and self.main_window.proportional_scale_enabled:
+                # 计算缩放比例，保持宽高比
+                scale_x = target_width / watermark_pixmap.width()
+                scale_y = target_height / watermark_pixmap.height()
+                scale = min(scale_x, scale_y)
+                
+                scaled_width = int(watermark_pixmap.width() * scale)
+                scaled_height = int(watermark_pixmap.height() * scale)
+            else:
+                scaled_width = target_width
+                scaled_height = target_height
+                
+            # 缩放水印图片
+            watermark_pixmap = watermark_pixmap.scaled(
+                scaled_width, scaled_height,
+                Qt.AspectRatioMode.IgnoreAspectRatio,
+                Qt.TransformationMode.SmoothTransformation
+            )
+        
+        # 获取透明度设置
+        opacity = 1.0
+        if hasattr(self.main_window, 'image_watermark_opacity'):
+            opacity = self.main_window.image_watermark_opacity / 100.0
+            
+        # 设置透明度
+        painter.setOpacity(opacity)
+        
+        # 计算水印位置（默认右上角）
+        watermark_x = canvas_size.width() - watermark_pixmap.width() - 10
+        watermark_y = 10
+        
+        # 如果有自定义位置，使用自定义位置
+        if hasattr(self.main_window, 'image_watermark_position'):
+            watermark_x = self.main_window.image_watermark_position.x()
+            watermark_y = self.main_window.image_watermark_position.y()
+        
+        # 绘制水印图片
+        painter.drawPixmap(watermark_x, watermark_y, watermark_pixmap)
+        
+        # 恢复透明度
+        painter.setOpacity(1.0)
+    
+    def _draw_image_watermark_scaled(self, painter, canvas_size, scale_x, scale_y):
+        """绘制缩放后的图片水印（用于导出）"""
+        if not hasattr(self.main_window, 'watermark_image_path') or not self.main_window.watermark_image_path:
+            return
+            
+        if not os.path.exists(self.main_window.watermark_image_path):
+            return
+            
+        # 加载水印图片
+        watermark_pixmap = QPixmap(self.main_window.watermark_image_path)
+        if watermark_pixmap.isNull():
+            return
+            
+        # 获取缩放设置并应用导出缩放比例
+        if hasattr(self.main_window, 'image_watermark_width') and hasattr(self.main_window, 'image_watermark_height'):
+            target_width = int(self.main_window.image_watermark_width * scale_x)
+            target_height = int(self.main_window.image_watermark_height * scale_y)
+            
+            # 如果启用了比例缩放，保持宽高比
+            if hasattr(self.main_window, 'proportional_scale_enabled') and self.main_window.proportional_scale_enabled:
+                # 计算缩放比例，保持宽高比
+                scale_ratio_x = target_width / watermark_pixmap.width()
+                scale_ratio_y = target_height / watermark_pixmap.height()
+                scale_ratio = min(scale_ratio_x, scale_ratio_y)
+                
+                scaled_width = int(watermark_pixmap.width() * scale_ratio)
+                scaled_height = int(watermark_pixmap.height() * scale_ratio)
+            else:
+                scaled_width = target_width
+                scaled_height = target_height
+                
+            # 缩放水印图片
+            watermark_pixmap = watermark_pixmap.scaled(
+                scaled_width, scaled_height,
+                Qt.AspectRatioMode.IgnoreAspectRatio,
+                Qt.TransformationMode.SmoothTransformation
+            )
+        
+        # 获取透明度设置
+        opacity = 1.0
+        if hasattr(self.main_window, 'image_watermark_opacity'):
+            opacity = self.main_window.image_watermark_opacity / 100.0
+            
+        # 设置透明度
+        painter.setOpacity(opacity)
+        
+        # 计算水印位置（默认右上角，应用缩放）
+        watermark_x = int((canvas_size.width() - watermark_pixmap.width() - 10))
+        watermark_y = int(10 * scale_y)
+        
+        # 如果有自定义位置，使用自定义位置并应用缩放
+        if hasattr(self.main_window, 'image_watermark_position'):
+            watermark_x = int(self.main_window.image_watermark_position.x() * scale_x)
+            watermark_y = int(self.main_window.image_watermark_position.y() * scale_y)
+        
+        # 绘制水印图片
+        painter.drawPixmap(watermark_x, watermark_y, watermark_pixmap)
+        
+        # 恢复透明度
+        painter.setOpacity(1.0)

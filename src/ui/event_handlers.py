@@ -7,9 +7,9 @@
 """
 
 import os
-from PyQt6.QtWidgets import QListWidget, QMessageBox, QWidget, QPushButton
+from PyQt6.QtWidgets import QListWidget, QMessageBox, QWidget, QPushButton, QFileDialog
 from PyQt6.QtCore import Qt, QPoint, QRect
-from PyQt6.QtGui import QDragEnterEvent, QDropEvent, QFont, QFontMetrics
+from PyQt6.QtGui import QDragEnterEvent, QDropEvent, QFont, QFontMetrics, QPixmap
 
 from core.image_processor import ImageProcessor
 
@@ -34,6 +34,9 @@ class EventHandlers:
         # 水印设置事件
         self.main_window.text_input.textChanged.connect(self._update_watermark_text)
         self.main_window.opacity_slider.valueChanged.connect(self._update_watermark_opacity)
+        
+        # 图片水印事件
+        self._setup_image_watermark_events()
         
         # 连接九宫格位置按钮
         self._connect_position_buttons()
@@ -88,6 +91,146 @@ class EventHandlers:
         """更新水印透明度"""
         self.main_window.watermark_opacity = value
         self.main_window.opacity_value.setText(f"{value}%")
+        self.main_window.watermark_handler.update_preview()
+    
+    def _setup_image_watermark_events(self):
+        """设置图片水印相关事件"""
+        # 启用图片水印复选框
+        if hasattr(self.main_window, 'enable_image_watermark'):
+            self.main_window.enable_image_watermark.toggled.connect(self._toggle_image_watermark)
+        
+        # 图片选择按钮
+        if hasattr(self.main_window, 'select_image_btn'):
+            self.main_window.select_image_btn.clicked.connect(self._select_watermark_image)
+        
+        # 图片水印透明度滑块
+        if hasattr(self.main_window, 'image_opacity_slider'):
+            self.main_window.image_opacity_slider.valueChanged.connect(self._update_image_opacity)
+        
+        # 缩放控制
+        if hasattr(self.main_window, 'proportional_scale'):
+            self.main_window.proportional_scale.toggled.connect(self._toggle_proportional_scale)
+        
+        if hasattr(self.main_window, 'image_width_spin'):
+            self.main_window.image_width_spin.valueChanged.connect(self._update_image_width)
+        
+        if hasattr(self.main_window, 'image_height_spin'):
+            self.main_window.image_height_spin.valueChanged.connect(self._update_image_height)
+    
+    def _toggle_image_watermark(self, enabled):
+        """切换图片水印启用状态"""
+        self.main_window.image_watermark_enabled = enabled
+        
+        # 设置相关控件的启用状态
+        self.main_window.ui_components.set_image_watermark_controls_enabled(enabled)
+        
+        self.main_window.watermark_handler.update_preview()
+    
+    def _select_watermark_image(self):
+        """选择水印图片"""
+        file_path, _ = QFileDialog.getOpenFileName(
+            self.main_window,
+            "选择水印图片",
+            "",
+            "图片文件 (*.png *.jpg *.jpeg *.bmp *.gif);;PNG文件 (*.png);;JPEG文件 (*.jpg *.jpeg)"
+        )
+        
+        if file_path:
+            # 加载图片并更新预览
+            pixmap = QPixmap(file_path)
+            if not pixmap.isNull():
+                self.main_window.watermark_image_path = file_path
+                self.main_window.watermark_image = pixmap
+                
+                # 更新路径标签
+                filename = os.path.basename(file_path)
+                if len(filename) > 20:
+                    filename = filename[:17] + "..."
+                self.main_window.image_path_label.setText(filename)
+                
+                # 更新预览图片
+                self._update_image_preview(pixmap)
+                
+                # 设置默认尺寸
+                self.main_window.image_width_spin.setValue(min(100, pixmap.width()))
+                self.main_window.image_height_spin.setValue(min(100, pixmap.height()))
+                
+                # 更新预览
+                self.main_window.watermark_handler.update_preview()
+            else:
+                QMessageBox.warning(self.main_window, "错误", "无法加载选择的图片文件")
+    
+    def _update_image_preview(self, pixmap):
+        """更新图片预览"""
+        if pixmap and not pixmap.isNull():
+            # 缩放图片以适应预览区域
+            preview_size = 70
+            scaled_pixmap = pixmap.scaled(
+                preview_size, preview_size, 
+                Qt.AspectRatioMode.KeepAspectRatio, 
+                Qt.TransformationMode.SmoothTransformation
+            )
+            self.main_window.image_preview_label.setPixmap(scaled_pixmap)
+        else:
+            self.main_window.image_preview_label.setText("图片预览")
+            self.main_window.image_preview_label.setPixmap(QPixmap())
+    
+    def _update_image_opacity(self, value):
+        """更新图片水印透明度"""
+        self.main_window.image_watermark_opacity = value
+        self.main_window.image_opacity_value.setText(f"{value}%")
+        self.main_window.watermark_handler.update_preview()
+    
+    def _toggle_proportional_scale(self, enabled):
+        """切换比例缩放模式"""
+        self.main_window.proportional_scale_enabled = enabled
+        if (enabled and hasattr(self.main_window, 'watermark_image') and 
+            self.main_window.watermark_image is not None):
+            # 如果启用比例缩放，根据当前宽度调整高度
+            self._update_image_width(self.main_window.image_width_spin.value())
+    
+    def _update_image_width(self, width):
+        """更新图片水印宽度"""
+        self.main_window.image_watermark_width = width
+        
+        # 如果启用比例缩放，同时更新高度
+        if (hasattr(self.main_window, 'proportional_scale_enabled') and 
+            self.main_window.proportional_scale_enabled and 
+            hasattr(self.main_window, 'watermark_image') and
+            self.main_window.watermark_image is not None):
+            
+            original_width = self.main_window.watermark_image.width()
+            original_height = self.main_window.watermark_image.height()
+            
+            if original_width > 0:
+                new_height = int(width * original_height / original_width)
+                self.main_window.image_height_spin.blockSignals(True)
+                self.main_window.image_height_spin.setValue(new_height)
+                self.main_window.image_height_spin.blockSignals(False)
+                self.main_window.image_watermark_height = new_height
+        
+        self.main_window.watermark_handler.update_preview()
+    
+    def _update_image_height(self, height):
+        """更新图片水印高度"""
+        self.main_window.image_watermark_height = height
+        
+        # 如果启用比例缩放，同时更新宽度
+        if (hasattr(self.main_window, 'proportional_scale_enabled') and 
+            self.main_window.proportional_scale_enabled and 
+            hasattr(self.main_window, 'watermark_image') and
+            self.main_window.watermark_image is not None):
+            
+            original_width = self.main_window.watermark_image.width()
+            original_height = self.main_window.watermark_image.height()
+            
+            if original_height > 0:
+                new_width = int(height * original_width / original_height)
+                self.main_window.image_width_spin.blockSignals(True)
+                self.main_window.image_width_spin.setValue(new_width)
+                self.main_window.image_width_spin.blockSignals(False)
+                self.main_window.image_watermark_width = new_width
+        
         self.main_window.watermark_handler.update_preview()
         
     def _set_preset_position(self, row, col):
