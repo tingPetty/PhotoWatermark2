@@ -8,10 +8,12 @@
 
 import os
 from PyQt6.QtWidgets import QListWidget, QMessageBox, QWidget, QPushButton, QFileDialog, QColorDialog
-from PyQt6.QtCore import Qt, QPoint, QRect
+from PyQt6.QtCore import Qt, QPoint, QRect, QTimer
 from PyQt6.QtGui import QDragEnterEvent, QDropEvent, QFont, QFontMetrics, QPixmap, QColor
 
 from core.image_processor import ImageProcessor
+from ui.dialogs.template_dialog import SaveTemplateDialog, LoadTemplateDialog, TemplateDialog
+from ui.template_manager import TemplateManager
 
 
 class EventHandlers:
@@ -19,6 +21,12 @@ class EventHandlers:
     
     def __init__(self, main_window):
         self.main_window = main_window
+        
+        # 节流机制相关变量
+        self._update_timer = QTimer()
+        self._update_timer.setSingleShot(True)
+        self._update_timer.timeout.connect(self._delayed_update_preview)
+        self._pending_update = False
         
     def setup_event_connections(self):
         """设置所有事件连接"""
@@ -51,6 +59,9 @@ class EventHandlers:
         self._connect_menu_actions()
         self._connect_toolbar_actions()
         
+        # 连接模板管理事件
+        self._setup_template_events()
+        
     def _setup_rotation_events(self):
         """设置旋转控件事件"""
         # 旋转滑块事件
@@ -65,6 +76,34 @@ class EventHandlers:
             self.main_window.rotation_value.setText(f"{value}°")
         # 更新预览
         self.main_window.watermark_handler.update_preview()
+    
+    def _show_about_dialog(self):
+        """显示关于对话框"""
+        about_text = """
+        <h2>PhotoWatermark2 - 图片水印工具</h2>
+        <p><b>版本:</b> 1.0.0</p>
+        <p><b>描述:</b> 一个功能强大的图片水印添加工具，支持文本水印和图片水印。</p>
+        
+        <p><b>主要功能:</b></p>
+        <ul>
+        <li>支持多种图片格式 (JPG, PNG, BMP, TIFF等)</li>
+        <li>文本水印：自定义字体、大小、颜色、透明度</li>
+        <li>图片水印：支持PNG透明背景</li>
+        <li>九宫格位置定位和自由拖拽</li>
+        <li>水印模板保存和管理</li>
+        <li>批量处理功能</li>
+        </ul>
+        
+        <p><b>开发者:</b> ZhuTing</p>
+        <p><b>技术栈:</b> Python + PyQt6</p>
+        
+        <p style="color: #666; font-size: 12px;">
+        感谢您使用 PhotoWatermark2！<br>
+        如有问题或建议，欢迎反馈。
+        </p>
+        """
+        
+        QMessageBox.about(self.main_window, "关于 PhotoWatermark2", about_text)
     
     def _connect_position_buttons(self):
         """连接九宫格位置按钮的事件"""
@@ -82,6 +121,9 @@ class EventHandlers:
         """图片选择事件处理"""
         file_path = item.data(Qt.ItemDataRole.UserRole)
         self.main_window.current_image = file_path
+        
+        # 清除缓存，确保新图片正确加载
+        self.main_window.watermark_handler.clear_cache()
         
         # 更新预览，强制重新计算尺寸
         self.main_window.watermark_handler.update_preview(force_resize=True)
@@ -141,6 +183,10 @@ class EventHandlers:
         
         if hasattr(self.main_window, 'stroke_checkbox'):
             self.main_window.stroke_checkbox.toggled.connect(self._update_text_stroke)
+        
+        # 描边颜色选择
+        if hasattr(self.main_window, 'stroke_color_button'):
+            self.main_window.stroke_color_button.clicked.connect(self._select_stroke_color)
     
     def _update_font(self, font):
         """更新字体"""
@@ -188,9 +234,29 @@ class EventHandlers:
             """)
             self.main_window.watermark_handler.update_preview()
     
-    def _update_text_shadow(self, enabled):
+    def _select_stroke_color(self):
+        """选择描边颜色"""
+        current_color = getattr(self.main_window, 'stroke_color', QColor(255, 255, 255))
+        color = QColorDialog.getColor(current_color, self.main_window, "选择描边颜色")
+        
+        if color.isValid():
+            self.main_window.stroke_color = color
+            # 更新描边颜色按钮的背景色
+            self.main_window.stroke_color_button.setStyleSheet(f"""
+                QPushButton {{
+                    background-color: {color.name()};
+                    border: 1px solid #ccc;
+                    border-radius: 3px;
+                }}
+                QPushButton:hover {{
+                    border: 2px solid #666;
+                }}
+            """)
+            self.main_window.watermark_handler.update_preview()
+    
+    def _update_text_shadow(self, checked):
         """更新文本阴影效果"""
-        self.main_window.text_shadow = enabled
+        self.main_window.text_shadow = checked
         self.main_window.watermark_handler.update_preview()
     
     def _update_text_stroke(self, enabled):
@@ -422,12 +488,29 @@ class EventHandlers:
         # 更新水印位置（在pixmap坐标系中）
         self.main_window.watermark_position = self.main_window.original_watermark_pos + delta_in_pixmap
         
-        # 更新预览
-        self.main_window.watermark_handler.update_preview()
+        # 使用节流机制更新预览
+        self._throttled_update_preview()
         
     def _preview_mouse_release(self, event):
         """处理预览区域的鼠标释放事件"""
         self.main_window.is_dragging = False
+        # 拖拽结束时立即更新一次，确保最终位置正确
+        if self._pending_update:
+            self._update_timer.stop()
+            self._delayed_update_preview()
+    
+    def _throttled_update_preview(self):
+        """节流更新预览，避免频繁更新"""
+        self._pending_update = True
+        if not self._update_timer.isActive():
+            # 设置16ms延迟，约60FPS的更新频率
+            self._update_timer.start(16)
+    
+    def _delayed_update_preview(self):
+        """延迟更新预览"""
+        if self._pending_update:
+            self._pending_update = False
+            self.main_window.watermark_handler.update_preview()
         
     def _get_watermark_rect(self):
         """获取水印文本的矩形区域"""
@@ -539,6 +622,12 @@ class EventHandlers:
                 self.main_window.menu_actions['export_all_action'].triggered.connect(
                     self.main_window.file_manager.export_all_images
                 )
+            
+            # 连接关于动作
+            if 'about_action' in self.main_window.menu_actions:
+                self.main_window.menu_actions['about_action'].triggered.connect(
+                    self._show_about_dialog
+                )
     
     def _connect_toolbar_actions(self):
         """连接工具栏动作事件"""
@@ -588,6 +677,179 @@ class EventHandlers:
     def _apply_watermark_to_current(self):
         """对当前图片应用水印"""
         if self.main_window.current_image:
-            self.main_window.watermark_handler.apply_watermark_to_image(
-                self.main_window.current_image
-            )
+            # 使用文件管理器的保存方法，确保用户选择输出路径
+            if hasattr(self.main_window, 'file_manager'):
+                self.main_window.file_manager.save_current_image()
+    
+    def _setup_template_events(self):
+        """设置模板管理事件"""
+        # 连接保存模板按钮
+        if hasattr(self.main_window, 'save_template_btn'):
+            self.main_window.save_template_btn.clicked.connect(self._save_template)
+        
+        # 连接加载模板按钮
+        if hasattr(self.main_window, 'load_template_btn'):
+            self.main_window.load_template_btn.clicked.connect(self._load_template)
+        
+        # 连接管理模板按钮
+        if hasattr(self.main_window, 'manage_template_btn'):
+            self.main_window.manage_template_btn.clicked.connect(self._manage_templates)
+    
+    def _save_template(self):
+        """保存当前设置为模板"""
+        dialog = SaveTemplateDialog(self.main_window)
+        dialog.exec()  # SaveTemplateDialog内部处理所有保存逻辑
+    
+    def _load_template(self):
+        """加载模板"""
+        dialog = LoadTemplateDialog(self.main_window)
+        
+        # 连接信号，当模板被选中时处理
+        def on_template_selected(template_data):
+            if template_data:
+                self._apply_template_settings(template_data)
+                template_name = template_data.get('name', '未知模板')
+                QMessageBox.information(
+                    self.main_window,
+                    "加载成功",
+                    f"模板 '{template_name}' 已加载成功！"
+                )
+        
+        dialog.template_selected.connect(on_template_selected)
+        dialog.exec()
+    
+    def _manage_templates(self):
+        """管理模板"""
+        dialog = TemplateDialog(self.main_window)
+        dialog.exec()
+    
+    def _get_current_watermark_settings(self):
+        """获取当前水印设置"""
+        settings = {}
+        
+        # 文本水印设置
+        if hasattr(self.main_window, 'text_input'):
+            settings['text'] = self.main_window.text_input.text()
+        
+        if hasattr(self.main_window, 'font_combo'):
+            settings['font_family'] = self.main_window.font_combo.currentFont().family()
+        
+        if hasattr(self.main_window, 'font_size_spin'):
+            settings['font_size'] = self.main_window.font_size_spin.value()
+        
+        if hasattr(self.main_window, 'bold_btn'):
+            settings['bold'] = self.main_window.bold_btn.isChecked()
+        
+        if hasattr(self.main_window, 'italic_btn'):
+            settings['italic'] = self.main_window.italic_btn.isChecked()
+        
+        if hasattr(self.main_window, 'text_color'):
+            color = self.main_window.text_color
+            settings['text_color'] = [color.red(), color.green(), color.blue(), color.alpha()]
+        
+        # 图片水印设置
+        if hasattr(self.main_window, 'watermark_image_path'):
+            settings['image_path'] = self.main_window.watermark_image_path
+        
+        if hasattr(self.main_window, 'image_size_spin'):
+            settings['image_size'] = self.main_window.image_size_spin.value()
+        
+        # 通用设置
+        if hasattr(self.main_window, 'opacity_slider'):
+            settings['opacity'] = self.main_window.opacity_slider.value()
+        
+        if hasattr(self.main_window, 'watermark_position'):
+            # 将QPoint对象转换为可序列化的列表格式
+            position = self.main_window.watermark_position
+            settings['position'] = [position.x(), position.y()]
+        
+        if hasattr(self.main_window, 'watermark_rotation'):
+            settings['rotation'] = self.main_window.watermark_rotation
+        
+        return settings
+    
+    def _apply_template_settings(self, settings):
+        """应用模板设置"""
+        print(f"DEBUG: _apply_template_settings called with settings: {settings}")
+        
+        # 应用文本水印设置
+        if 'watermark_text' in settings and hasattr(self.main_window, 'text_input'):
+            self.main_window.text_input.setText(settings['watermark_text'])
+        
+        if 'font_family' in settings and hasattr(self.main_window, 'font_combo'):
+            font = QFont(settings['font_family'])
+            self.main_window.font_combo.setCurrentFont(font)
+        
+        if 'font_size' in settings and hasattr(self.main_window, 'font_size_spin'):
+            self.main_window.font_size_spin.setValue(settings['font_size'])
+        
+        if 'font_bold' in settings and hasattr(self.main_window, 'bold_checkbox'):
+            self.main_window.bold_checkbox.setChecked(settings['font_bold'])
+        
+        if 'font_italic' in settings and hasattr(self.main_window, 'italic_checkbox'):
+            self.main_window.italic_checkbox.setChecked(settings['font_italic'])
+        
+        if 'font_color' in settings and hasattr(self.main_window, 'text_color'):
+            # 处理颜色字符串格式 (如 "#aa55ff")
+            color_str = settings['font_color']
+            self.main_window.text_color = QColor(color_str)
+            # 更新颜色按钮显示
+            if hasattr(self.main_window, 'color_button'):
+                self.main_window.color_button.setStyleSheet(
+                    f"QPushButton {{ background-color: {self.main_window.text_color.name()}; }}"
+                )
+        
+        # 应用阴影设置
+        if 'font_shadow' in settings and hasattr(self.main_window, 'shadow_checkbox'):
+            self.main_window.shadow_checkbox.setChecked(settings['font_shadow'])
+        
+        # 应用描边设置
+        if 'font_stroke' in settings and hasattr(self.main_window, 'stroke_checkbox'):
+            self.main_window.stroke_checkbox.setChecked(settings['font_stroke'])
+        
+        # 应用描边颜色设置
+        if 'stroke_color' in settings and hasattr(self.main_window, 'stroke_color'):
+            color_str = settings['stroke_color']
+            self.main_window.stroke_color = QColor(color_str)
+            # 更新描边颜色按钮显示
+            if hasattr(self.main_window, 'stroke_color_button'):
+                self.main_window.stroke_color_button.setStyleSheet(
+                    f"QPushButton {{ background-color: {self.main_window.stroke_color.name()}; border: 1px solid #ccc; border-radius: 3px; }}"
+                )
+        
+        # 应用图片水印设置
+        if 'image_path' in settings and settings['image_path']:
+            self.main_window.watermark_image_path = settings['image_path']
+            # 更新图片显示
+            if hasattr(self.main_window, 'image_preview'):
+                pixmap = QPixmap(settings['image_path'])
+                if not pixmap.isNull():
+                    scaled_pixmap = pixmap.scaled(100, 100, Qt.AspectRatioMode.KeepAspectRatio, Qt.TransformationMode.SmoothTransformation)
+                    self.main_window.image_preview.setPixmap(scaled_pixmap)
+        
+        if 'image_size' in settings and hasattr(self.main_window, 'image_size_spin'):
+            self.main_window.image_size_spin.setValue(settings['image_size'])
+        
+        # 应用通用设置
+        if 'watermark_opacity' in settings and hasattr(self.main_window, 'opacity_slider'):
+            self.main_window.opacity_slider.setValue(settings['watermark_opacity'])
+        
+        if 'watermark_position' in settings:
+            # 将列表格式转换为QPoint对象
+            position = settings['watermark_position']
+            if isinstance(position, list) and len(position) == 2:
+                self.main_window.watermark_position = QPoint(position[0], position[1])
+            elif hasattr(position, 'x') and hasattr(position, 'y'):
+                # 兼容旧格式的QPoint对象
+                self.main_window.watermark_position = position
+        
+        if 'watermark_rotation' in settings and hasattr(self.main_window, 'rotation_slider'):
+            self.main_window.watermark_rotation = settings['watermark_rotation']
+            self.main_window.rotation_slider.setValue(settings['watermark_rotation'])
+            # 更新显示值
+            if hasattr(self.main_window, 'rotation_value'):
+                self.main_window.rotation_value.setText(f"{settings['watermark_rotation']}°")
+        
+        # 更新预览
+        if hasattr(self.main_window, 'watermark_handler'):
+            self.main_window.watermark_handler.update_preview()

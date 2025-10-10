@@ -65,7 +65,7 @@ class UIComponents:
         
         # 预览区域
         self.main_window.preview_area = self._create_preview_area()
-        right_layout.addWidget(self.main_window.preview_area, 3)
+        right_layout.addWidget(self.main_window.preview_area, 8)
         
         # 水印设置区域
         watermark_widget = self._create_watermark_widget()
@@ -75,9 +75,17 @@ class UIComponents:
     
     def _create_preview_area(self):
         """创建预览区域"""
+        from PyQt6.QtWidgets import QSizePolicy
+        
         preview_area = QLabel("图片预览区域")
         preview_area.setAlignment(Qt.AlignmentFlag.AlignCenter)
         preview_area.setStyleSheet("background-color: #f0f0f0; border: 1px solid #ddd;")
+        
+        # 设置尺寸策略，防止预览区域无限增大
+        preview_area.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Expanding)
+        preview_area.setMinimumSize(400, 300)  # 设置最小尺寸
+        preview_area.setScaledContents(False)  # 不自动缩放内容
+        
         return preview_area
     
     def _create_watermark_widget(self):
@@ -362,6 +370,7 @@ class UIComponents:
             }
         """)
         color_row_layout.addWidget(self.main_window.shadow_checkbox)
+        color_row_layout.addSpacing(30)
         
         # 描边复选框
         self.main_window.stroke_checkbox = QCheckBox("描边")
@@ -385,6 +394,24 @@ class UIComponents:
             }
         """)
         color_row_layout.addWidget(self.main_window.stroke_checkbox)
+        
+        # 减小描边和调色盘之间的间距
+        color_row_layout.addSpacing(3)
+        
+        # 描边颜色选择器
+        self.main_window.stroke_color_button = QPushButton()
+        self.main_window.stroke_color_button.setFixedSize(20, 20)  # 比主颜色按钮稍小
+        self.main_window.stroke_color_button.setStyleSheet("""
+            QPushButton {
+                background-color: #FFFFFF;
+                border: 1px solid #ccc;
+                border-radius: 3px;
+            }
+            QPushButton:hover {
+                border: 2px solid #666;
+            }
+        """)
+        color_row_layout.addWidget(self.main_window.stroke_color_button)
         
         color_style_layout.addLayout(color_row_layout)
         return color_style_layout
@@ -487,7 +514,7 @@ class UIComponents:
         return grid_layout
     
     def _create_right_watermark_area(self):
-        """创建右侧水印区域（图片水印功能）"""
+        """创建右侧水印区域（图片水印功能和水印模板）"""
         right_watermark_area = QWidget()
         right_watermark_layout = QVBoxLayout(right_watermark_area)
         right_watermark_layout.setContentsMargins(5, 5, 5, 5)
@@ -496,17 +523,19 @@ class UIComponents:
         image_group = self._create_image_watermark_group()
         right_watermark_layout.addWidget(image_group)
         
-        # 添加弹性空间
-        right_watermark_layout.addStretch(1)
+        # 水印模板设置组
+        template_group = self._create_template_group()
+        right_watermark_layout.addWidget(template_group)
         
         return right_watermark_area
     
     def _create_image_watermark_group(self):
         """创建图片水印设置组"""
-        # 创建一个普通的Widget而不是QGroupBox，去掉标题和边框
-        image_widget = QWidget()
+        # 创建QGroupBox，添加标题和边框
+        image_group = QGroupBox()
+        image_group.setStyleSheet("QGroupBox { font-weight: bold; }")
         image_layout = QVBoxLayout()
-        image_layout.setSpacing(10)
+        image_layout.setSpacing(8)
         
         # 启用图片水印复选框
         self.main_window.enable_image_watermark = QCheckBox("启用图片水印")
@@ -552,8 +581,8 @@ class UIComponents:
         image_opacity_layout = self._create_image_opacity_layout()
         image_layout.addLayout(image_opacity_layout)
         
-        image_widget.setLayout(image_layout)
-        return image_widget
+        image_group.setLayout(image_layout)
+        return image_group
     
     def _create_image_select_layout(self):
         """创建图片选择布局"""
@@ -869,12 +898,6 @@ class UIComponents:
         exit_action.triggered.connect(self.main_window.close)
         file_menu.addAction(exit_action)
         
-        # 编辑菜单
-        edit_menu = menu_bar.addMenu("编辑")
-        
-        # 水印菜单
-        watermark_menu = menu_bar.addMenu("水印")
-        
         # 帮助菜单
         help_menu = menu_bar.addMenu("帮助")
         
@@ -912,18 +935,11 @@ class UIComponents:
         export_action = QAction("导出图片", self.main_window)
         tool_bar.addAction(export_action)
         
-        tool_bar.addSeparator()
-        
-        # 添加水印按钮
-        add_watermark_action = QAction("添加水印", self.main_window)
-        tool_bar.addAction(add_watermark_action)
-        
         return {
             'open_action': open_action,
             'open_folder_action': open_folder_action,
             'remove_action': remove_action,
-            'export_action': export_action,
-            'add_watermark_action': add_watermark_action
+            'export_action': export_action
         }
     
     def create_status_bar(self):
@@ -1017,3 +1033,93 @@ class UIComponents:
         rotation_layout.addWidget(self.main_window.rotation_value)
         
         return rotation_layout
+    
+    def _create_template_buttons(self):
+        """创建水印模板管理按钮组"""
+        # 按钮布局
+        buttons_layout = QHBoxLayout()
+        buttons_layout.setSpacing(5)
+        
+        # 保存模板按钮
+        self.main_window.save_template_btn = QPushButton("保存模板")
+        self.main_window.save_template_btn.setFixedHeight(28)
+        self.main_window.save_template_btn.setStyleSheet("""
+            QPushButton {
+                background-color: #4CAF50;
+                color: white;
+                border: none;
+                border-radius: 3px;
+                padding: 5px 10px;
+                font-size: 11px;
+            }
+            QPushButton:hover {
+                background-color: #45a049;
+            }
+            QPushButton:pressed {
+                background-color: #3d8b40;
+            }
+        """)
+        buttons_layout.addWidget(self.main_window.save_template_btn)
+        
+        # 加载模板按钮
+        self.main_window.load_template_btn = QPushButton("加载模板")
+        self.main_window.load_template_btn.setFixedHeight(28)
+        self.main_window.load_template_btn.setStyleSheet("""
+            QPushButton {
+                background-color: #2196F3;
+                color: white;
+                border: none;
+                border-radius: 3px;
+                padding: 5px 10px;
+                font-size: 11px;
+            }
+            QPushButton:hover {
+                background-color: #1976D2;
+            }
+            QPushButton:pressed {
+                background-color: #0D47A1;
+            }
+        """)
+        buttons_layout.addWidget(self.main_window.load_template_btn)
+        
+        # 管理模板按钮
+        self.main_window.manage_template_btn = QPushButton("管理模板")
+        self.main_window.manage_template_btn.setFixedHeight(28)
+        self.main_window.manage_template_btn.setStyleSheet("""
+            QPushButton {
+                background-color: #FF9800;
+                color: white;
+                border: none;
+                border-radius: 3px;
+                padding: 5px 10px;
+                font-size: 11px;
+            }
+            QPushButton:hover {
+                background-color: #F57C00;
+            }
+            QPushButton:pressed {
+                background-color: #E65100;
+            }
+        """)
+        buttons_layout.addWidget(self.main_window.manage_template_btn)
+        
+        return buttons_layout
+    
+    def _create_template_group(self):
+        """创建水印模板设置组"""
+        template_group = QGroupBox()
+        template_group.setStyleSheet("QGroupBox { font-weight: bold; }")
+        template_layout = QVBoxLayout()
+        template_layout.setSpacing(8)
+        
+        # 水印模板标题
+        template_label = QLabel("水印模板:")
+        template_label.setStyleSheet("QLabel { border: none; background: transparent; }")
+        template_layout.addWidget(template_label)
+        
+        # 水印模板管理按钮组
+        template_buttons_layout = self._create_template_buttons()
+        template_layout.addLayout(template_buttons_layout)
+        
+        template_group.setLayout(template_layout)
+        return template_group

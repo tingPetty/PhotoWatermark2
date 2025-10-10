@@ -7,7 +7,7 @@
 """
 
 from PyQt6.QtCore import Qt, QPoint
-from PyQt6.QtGui import QPixmap, QFont, QColor, QPainter, QPen
+from PyQt6.QtGui import QPixmap, QFont, QColor, QPainter, QPen, QPainterPath
 import os
 
 from core.image_processor import ImageProcessor
@@ -18,43 +18,58 @@ class WatermarkHandler:
     
     def __init__(self, main_window):
         self.main_window = main_window
+        # 添加缓存变量
+        self._cached_image_path = None
+        self._cached_base_pixmap = None
+        self._cached_preview_size = None
         
     def update_preview(self, force_resize=False):
         """更新预览区域，显示带水印的图片"""
         if not self.main_window.current_image:
             return
+        
+        # 获取预览区域的可用尺寸
+        preview_rect = self.main_window.preview_area.contentsRect()
+        max_width = max(400, preview_rect.width() - 20)  # 减去边距
+        max_height = max(300, preview_rect.height() - 20)  # 减去边距
+        current_size = (max_width, max_height)
+        
+        # 检查是否需要重新加载和缩放图片
+        need_reload = (
+            force_resize or
+            self._cached_image_path != self.main_window.current_image or
+            self._cached_preview_size != current_size or
+            self._cached_base_pixmap is None
+        )
+        
+        if need_reload:
+            # 加载原始图片
+            image = ImageProcessor.load_image(self.main_window.current_image)
+            if not image:
+                return
+                
+            pixmap = ImageProcessor.pil_to_pixmap(image)
             
-        # 加载原始图片
-        image = ImageProcessor.load_image(self.main_window.current_image)
-        if not image:
+            # 缩放图片，保持宽高比
+            scaled_pixmap = pixmap.scaled(
+                max_width, 
+                max_height,
+                Qt.AspectRatioMode.KeepAspectRatio,
+                Qt.TransformationMode.SmoothTransformation
+            )
+            
+            # 更新缓存
+            self._cached_image_path = self.main_window.current_image
+            self._cached_base_pixmap = scaled_pixmap
+            self._cached_preview_size = current_size
+        
+        # 使用缓存的基础图片
+        base_pixmap = self._cached_base_pixmap
+        if not base_pixmap:
             return
-            
-        pixmap = ImageProcessor.pil_to_pixmap(image)
-        
-        # 检查是否需要重新计算尺寸
-        current_pixmap = self.main_window.preview_area.pixmap()
-        should_resize = force_resize or not current_pixmap or current_pixmap.isNull()
-        
-        if should_resize:
-            # 重新计算适合预览区域的尺寸
-            preview_size = self.main_window.preview_area.size()
-            scaled_pixmap = pixmap.scaled(
-                preview_size.width(), 
-                preview_size.height(),
-                Qt.AspectRatioMode.KeepAspectRatio,
-                Qt.TransformationMode.SmoothTransformation
-            )
-        else:
-            # 保持当前尺寸，仅更新水印
-            scaled_pixmap = pixmap.scaled(
-                current_pixmap.width(), 
-                current_pixmap.height(),
-                Qt.AspectRatioMode.KeepAspectRatio,
-                Qt.TransformationMode.SmoothTransformation
-            )
         
         # 创建一个新的QPixmap用于绘制水印
-        result_pixmap = QPixmap(scaled_pixmap)
+        result_pixmap = QPixmap(base_pixmap)
         painter = QPainter(result_pixmap)
         
         # 绘制文本水印
@@ -64,12 +79,18 @@ class WatermarkHandler:
         # 绘制图片水印
         if hasattr(self.main_window, 'image_watermark_enabled') and self.main_window.image_watermark_enabled:
             if hasattr(self.main_window, 'watermark_image_path') and self.main_window.watermark_image_path:
-                self._draw_image_watermark(painter, scaled_pixmap.size())
+                self._draw_image_watermark(painter, base_pixmap.size())
         
         painter.end()
         
         # 显示带水印的图片
         self.main_window.preview_area.setPixmap(result_pixmap)
+    
+    def clear_cache(self):
+        """清除缓存，强制重新加载图片"""
+        self._cached_image_path = None
+        self._cached_base_pixmap = None
+        self._cached_preview_size = None
     
     def apply_watermark_to_image(self, image_path, output_path=None, export_settings=None):
         """将水印应用到指定图片并保存"""
@@ -358,15 +379,28 @@ class WatermarkHandler:
             painter.setPen(shadow_color)
             painter.drawText(draw_x + 2, draw_y + 2, text)  # 阴影偏移2像素
         
-        # 再绘制描边效果（如果启用）
+        # 如果启用描边效果，使用QPainterPath绘制
         if hasattr(self.main_window, 'text_stroke') and self.main_window.text_stroke:
-            stroke_pen = QPen(QColor(255, 255, 255), 2)  # 白色描边，2像素宽度
+            # 创建文本路径
+            path = QPainterPath()
+            path.addText(draw_x, draw_y, self.main_window.text_font, text)
+            
+            # 绘制描边（轮廓）
+            stroke_color = getattr(self.main_window, 'stroke_color', QColor(255, 255, 255))
+            stroke_pen = QPen(stroke_color, 3)  # 描边宽度
+            stroke_pen.setJoinStyle(Qt.PenJoinStyle.RoundJoin)
             painter.setPen(stroke_pen)
+            painter.setBrush(Qt.BrushStyle.NoBrush)  # 不填充
+            painter.drawPath(path)
+            
+            # 绘制文本填充
+            painter.setPen(Qt.PenStyle.NoPen)  # 不要轮廓
+            painter.setBrush(self.main_window.text_color)  # 使用文本颜色填充
+            painter.drawPath(path)
+        else:
+            # 没有描边时，直接绘制文本
+            painter.setPen(self.main_window.text_color)
             painter.drawText(draw_x, draw_y, text)
-        
-        # 最后绘制主文本
-        painter.setPen(self.main_window.text_color)
-        painter.drawText(draw_x, draw_y, text)
         
         # 恢复画笔状态
         painter.restore()
@@ -412,17 +446,29 @@ class WatermarkHandler:
             painter.setPen(shadow_color)
             painter.drawText(draw_x + shadow_offset, draw_y + shadow_offset, text)
         
-        # 再绘制描边效果（如果启用）
+        # 如果启用描边效果，使用QPainterPath绘制
         if hasattr(self.main_window, 'text_stroke') and self.main_window.text_stroke:
-            # 绘制描边效果（描边宽度也需要缩放）
-            stroke_width = int(2 * max(scale_x, scale_y))
-            stroke_pen = QPen(QColor(255, 255, 255), stroke_width)
+            # 创建文本路径（使用缩放后的字体）
+            path = QPainterPath()
+            path.addText(draw_x, draw_y, scaled_font, text)
+            
+            # 绘制描边（轮廓）- 描边宽度也需要缩放
+            stroke_width = int(3 * max(scale_x, scale_y))
+            stroke_color = getattr(self.main_window, 'stroke_color', QColor(255, 255, 255))
+            stroke_pen = QPen(stroke_color, stroke_width)
+            stroke_pen.setJoinStyle(Qt.PenJoinStyle.RoundJoin)
             painter.setPen(stroke_pen)
+            painter.setBrush(Qt.BrushStyle.NoBrush)  # 不填充
+            painter.drawPath(path)
+            
+            # 绘制文本填充
+            painter.setPen(Qt.PenStyle.NoPen)  # 不要轮廓
+            painter.setBrush(self.main_window.text_color)  # 使用文本颜色填充
+            painter.drawPath(path)
+        else:
+            # 没有描边时，直接绘制文本
+            painter.setPen(self.main_window.text_color)
             painter.drawText(draw_x, draw_y, text)
-        
-        # 最后绘制主文本
-        painter.setPen(self.main_window.text_color)
-        painter.drawText(draw_x, draw_y, text)
         
         # 恢复画笔状态
         painter.restore()
