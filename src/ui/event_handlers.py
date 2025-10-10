@@ -44,10 +44,28 @@ class EventHandlers:
         # 连接九宫格位置按钮
         self._connect_position_buttons()
         
+        # 连接旋转控件事件
+        self._setup_rotation_events()
+        
         # 连接菜单栏和工具栏事件
         self._connect_menu_actions()
         self._connect_toolbar_actions()
         
+    def _setup_rotation_events(self):
+        """设置旋转控件事件"""
+        # 旋转滑块事件
+        if hasattr(self.main_window, 'rotation_slider'):
+            self.main_window.rotation_slider.valueChanged.connect(self._update_rotation_from_slider)
+    
+    def _update_rotation_from_slider(self, value):
+        """从滑块更新旋转角度"""
+        self.main_window.watermark_rotation = value
+        # 更新显示值
+        if hasattr(self.main_window, 'rotation_value'):
+            self.main_window.rotation_value.setText(f"{value}°")
+        # 更新预览
+        self.main_window.watermark_handler.update_preview()
+    
     def _connect_position_buttons(self):
         """连接九宫格位置按钮的事件"""
         # 查找所有位置按钮并连接事件

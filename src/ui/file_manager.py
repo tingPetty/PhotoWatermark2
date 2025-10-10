@@ -245,7 +245,8 @@ class FileManager:
             try:
                 success = self.main_window.watermark_handler.apply_watermark_to_image(
                     original_path, 
-                    output_path
+                    output_path,
+                    settings
                 )
                 
                 if success:

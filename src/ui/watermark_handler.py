@@ -71,7 +71,7 @@ class WatermarkHandler:
         # 显示带水印的图片
         self.main_window.preview_area.setPixmap(result_pixmap)
     
-    def apply_watermark_to_image(self, image_path, output_path=None):
+    def apply_watermark_to_image(self, image_path, output_path=None, export_settings=None):
         """将水印应用到指定图片并保存"""
         # 加载原始图片
         image = ImageProcessor.load_image(image_path)
@@ -80,6 +80,10 @@ class WatermarkHandler:
             
         # 转换为QPixmap
         pixmap = ImageProcessor.pil_to_pixmap(image)
+        
+        # 根据导出设置调整图片尺寸
+        if export_settings and export_settings.get('size_mode', 0) != 0:
+            pixmap = self._resize_pixmap(pixmap, export_settings)
         
         # 计算水印位置的缩放比例
         # 获取当前预览图片的尺寸
@@ -125,10 +129,10 @@ class WatermarkHandler:
         
         # 保存图片
         if output_path:
-            return result_pixmap.save(output_path)
+            return self._save_pixmap_with_settings(result_pixmap, output_path, export_settings)
         else:
             # 如果没有指定输出路径，覆盖原文件
-            return result_pixmap.save(image_path)
+            return self._save_pixmap_with_settings(result_pixmap, image_path, export_settings)
     
     def get_watermark_preview(self, image_path):
         """获取带水印的图片预览（不保存）"""
@@ -230,39 +234,145 @@ class WatermarkHandler:
         
         # 恢复透明度
         painter.setOpacity(1.0)
+
+    def _resize_pixmap(self, pixmap, export_settings):
+        """根据导出设置调整图片尺寸"""
+        size_mode = export_settings.get('size_mode', 0)
+        
+        if size_mode == 1:  # 按百分比缩放
+            percent = export_settings.get('percent_scale', 100)
+            new_width = int(pixmap.width() * percent / 100)
+            new_height = int(pixmap.height() * percent / 100)
+        elif size_mode == 2:  # 自定义尺寸
+            new_width = export_settings.get('custom_width', pixmap.width())
+            new_height = export_settings.get('custom_height', pixmap.height())
+            
+            # 如果保持宽高比，重新计算尺寸
+            if export_settings.get('keep_aspect_ratio', True):
+                original_ratio = pixmap.width() / pixmap.height()
+                target_ratio = new_width / new_height
+                
+                if target_ratio > original_ratio:
+                    # 以高度为准
+                    new_width = int(new_height * original_ratio)
+                else:
+                    # 以宽度为准
+                    new_height = int(new_width / original_ratio)
+        else:
+            # 保持原始尺寸
+            return pixmap
+        
+        # 执行缩放
+        return pixmap.scaled(
+            new_width, new_height,
+            Qt.AspectRatioMode.IgnoreAspectRatio,
+            Qt.TransformationMode.SmoothTransformation
+        )
+
+    def _save_pixmap_with_settings(self, pixmap, output_path, export_settings):
+        """根据导出设置保存图片"""
+        if not export_settings:
+            return pixmap.save(output_path)
+        
+        # 获取文件格式
+        format_name = export_settings.get('format', 'jpeg').upper()
+        
+        # 如果是JPEG格式，需要特殊处理质量设置
+        if format_name == 'JPEG':
+            try:
+                # 转换QPixmap为PIL Image以支持质量设置
+                from PIL import Image
+                from PyQt6.QtCore import QBuffer, QIODevice
+                import io
+                
+                # 将QPixmap转换为字节流
+                buffer = QBuffer()
+                buffer.open(QIODevice.OpenModeFlag.WriteOnly)
+                pixmap.save(buffer, 'PNG')  # 先保存为PNG格式
+                
+                # 转换为PIL可以读取的格式
+                byte_array = io.BytesIO(buffer.data())
+                
+                # 用PIL加载
+                pil_image = Image.open(byte_array)
+                
+                # 转换为RGB模式（JPEG不支持透明度）
+                if pil_image.mode in ('RGBA', 'LA'):
+                    # 创建白色背景
+                    background = Image.new('RGB', pil_image.size, (255, 255, 255))
+                    if pil_image.mode == 'RGBA':
+                        background.paste(pil_image, mask=pil_image.split()[-1])  # 使用alpha通道作为mask
+                    else:
+                        background.paste(pil_image)
+                    pil_image = background
+                elif pil_image.mode != 'RGB':
+                    pil_image = pil_image.convert('RGB')
+                
+                # 保存为JPEG，应用质量设置
+                quality = int(export_settings.get('quality', 95))  # 确保质量是整数
+                quality = max(1, min(100, quality))  # 限制范围在1-100之间
+                
+                pil_image.save(output_path, 'JPEG', quality=quality, optimize=True)
+                return True
+                
+            except Exception as e:
+                print(f"JPEG保存失败: {e}")
+                # 如果PIL保存失败，回退到Qt保存
+                return pixmap.save(output_path, 'JPEG')
+        else:
+            # 其他格式直接保存
+            return pixmap.save(output_path, format_name)
     
     def _draw_text_watermark(self, painter):
-        """绘制文本水印，支持字体、颜色和样式效果"""
+        """绘制文本水印，支持字体、颜色、样式效果和旋转"""
         # 设置字体
         painter.setFont(self.main_window.text_font)
         
         # 设置透明度
         painter.setOpacity(self.main_window.watermark_opacity / 100.0)
         
-        # 获取文本位置
+        # 获取文本位置和旋转角度
         x = self.main_window.watermark_position.x()
         y = self.main_window.watermark_position.y()
         text = self.main_window.watermark_text
+        rotation = getattr(self.main_window, 'watermark_rotation', 0)
+        
+        # 保存当前画笔状态
+        painter.save()
+        
+        # 如果有旋转角度，应用旋转变换
+        if rotation != 0:
+            # 将坐标系原点移动到文本位置
+            painter.translate(x, y)
+            # 应用旋转
+            painter.rotate(rotation)
+            # 重置绘制位置为原点
+            draw_x, draw_y = 0, 0
+        else:
+            draw_x, draw_y = x, y
         
         # 根据样式效果绘制文本
         # 先绘制阴影效果（如果启用）
         if hasattr(self.main_window, 'text_shadow') and self.main_window.text_shadow:
             shadow_color = QColor(128, 128, 128, 180)  # 半透明灰色阴影
             painter.setPen(shadow_color)
-            painter.drawText(x + 2, y + 2, text)  # 阴影偏移2像素
+            painter.drawText(draw_x + 2, draw_y + 2, text)  # 阴影偏移2像素
         
         # 再绘制描边效果（如果启用）
         if hasattr(self.main_window, 'text_stroke') and self.main_window.text_stroke:
             stroke_pen = QPen(QColor(255, 255, 255), 2)  # 白色描边，2像素宽度
             painter.setPen(stroke_pen)
-            painter.drawText(x, y, text)
+            painter.drawText(draw_x, draw_y, text)
         
         # 最后绘制主文本
         painter.setPen(self.main_window.text_color)
-        painter.drawText(x, y, text)
+        painter.drawText(draw_x, draw_y, text)
+        
+        # 恢复画笔状态
+        painter.restore()
     
     def _draw_text_watermark_scaled(self, painter, x, y, scale_x, scale_y):
-        """绘制缩放后的文本水印（用于导出）"""
+        """绘制缩放后的文本水印（用于导出），支持旋转"""
         # 创建缩放后的字体
         scaled_font = QFont(self.main_window.text_font)
         original_size = self.main_window.text_font.pointSize()
@@ -275,8 +385,23 @@ class WatermarkHandler:
         # 设置透明度
         painter.setOpacity(self.main_window.watermark_opacity / 100.0)
         
-        # 获取文本
+        # 获取文本和旋转角度
         text = self.main_window.watermark_text
+        rotation = getattr(self.main_window, 'watermark_rotation', 0)
+        
+        # 保存当前画笔状态
+        painter.save()
+        
+        # 如果有旋转角度，应用旋转变换
+        if rotation != 0:
+            # 将坐标系原点移动到文本位置
+            painter.translate(x, y)
+            # 应用旋转
+            painter.rotate(rotation)
+            # 重置绘制位置为原点
+            draw_x, draw_y = 0, 0
+        else:
+            draw_x, draw_y = x, y
         
         # 根据样式效果绘制文本
         # 先绘制阴影效果（如果启用）
@@ -285,7 +410,7 @@ class WatermarkHandler:
             shadow_offset = int(2 * max(scale_x, scale_y))
             shadow_color = QColor(128, 128, 128, 180)
             painter.setPen(shadow_color)
-            painter.drawText(x + shadow_offset, y + shadow_offset, text)
+            painter.drawText(draw_x + shadow_offset, draw_y + shadow_offset, text)
         
         # 再绘制描边效果（如果启用）
         if hasattr(self.main_window, 'text_stroke') and self.main_window.text_stroke:
@@ -293,11 +418,14 @@ class WatermarkHandler:
             stroke_width = int(2 * max(scale_x, scale_y))
             stroke_pen = QPen(QColor(255, 255, 255), stroke_width)
             painter.setPen(stroke_pen)
-            painter.drawText(x, y, text)
+            painter.drawText(draw_x, draw_y, text)
         
         # 最后绘制主文本
         painter.setPen(self.main_window.text_color)
-        painter.drawText(x, y, text)
+        painter.drawText(draw_x, draw_y, text)
+        
+        # 恢复画笔状态
+        painter.restore()
     
     def _draw_image_watermark_scaled(self, painter, canvas_size, scale_x, scale_y):
         """绘制缩放后的图片水印（用于导出）"""

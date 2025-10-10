@@ -32,9 +32,10 @@ class MainWindow(QMainWindow):
         self.current_image = None  # 当前选中的图片
         
         # 水印数据
-        self.watermark_text = "水印文本"  # 默认水印文本
-        self.watermark_opacity = 50  # 默认透明度 (0-100)
-        self.watermark_position = QPoint(50, 50)  # 默认位置
+        self.watermark_text = "水印文本"
+        self.watermark_position = QPoint(50, 50)
+        self.watermark_opacity = 80  # 透明度 (0-100)
+        self.watermark_rotation = 0  # 旋转角度 (0-360)
         self.is_dragging = False  # 是否正在拖拽水印
         
         # 新的文本水印属性

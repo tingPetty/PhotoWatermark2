@@ -432,7 +432,7 @@ class UIComponents:
         position_group = QGroupBox()
         position_group.setStyleSheet("QGroupBox { font-weight: bold; }")
         position_layout = QVBoxLayout()
-        position_layout.setSpacing(10)
+        position_layout.setSpacing(8)  # 减小间距
         
         # 九宫格位置选择
         preset_label = QLabel("预设位置:")
@@ -444,8 +444,12 @@ class UIComponents:
         
         # 拖拽提示
         hint_label = QLabel("提示: 您也可以直接在预览区域拖拽水印")
-        hint_label.setStyleSheet("QLabel { border: none; background: transparent; color: #666; }")
+        hint_label.setStyleSheet("QLabel { border: none; background: transparent; color: #666; font-size: 12px; font-weight: bold; }")
         position_layout.addWidget(hint_label)
+        
+        # 旋转角度设置
+        rotation_layout = self._create_rotation_layout()
+        position_layout.addLayout(rotation_layout)
         
         position_group.setLayout(position_layout)
         return position_group
@@ -453,7 +457,7 @@ class UIComponents:
     def _create_position_grid(self):
         """创建九宫格位置选择"""
         grid_layout = QGridLayout()
-        grid_layout.setSpacing(5)
+        grid_layout.setSpacing(3)  # 减小间距从5到3
         positions = [
             (0, 0, "左上"), (0, 1, "上中"), (0, 2, "右上"),
             (1, 0, "左中"), (1, 1, "中心"), (1, 2, "右中"),
@@ -462,7 +466,7 @@ class UIComponents:
         
         for row, col, name in positions:
             btn = QPushButton(name)
-            btn.setFixedSize(60, 30)
+            btn.setFixedSize(45, 25)  # 减小按钮尺寸从60x30到45x25
             btn.setStyleSheet("""
                 QPushButton {
                     background-color: white;
@@ -975,3 +979,41 @@ class UIComponents:
                     {control.styleSheet()}
                     opacity: {opacity};
                 """)
+
+    def _create_rotation_layout(self):
+        """创建旋转角度控件布局"""
+        rotation_layout = QHBoxLayout()
+        rotation_label = QLabel("旋转角度:")
+        rotation_label.setFixedWidth(60)
+        rotation_label.setStyleSheet("QLabel { border: none; background: transparent; }")
+        rotation_layout.addWidget(rotation_label)
+        
+        self.main_window.rotation_slider = QSlider(Qt.Orientation.Horizontal)
+        self.main_window.rotation_slider.setStyleSheet("""
+            QSlider {
+                border: none;
+                background: transparent;
+            }
+            QSlider::groove:horizontal {
+                background: #e0e0e0;
+                height: 8px;
+                border-radius: 4px;
+                border: none;
+            }
+            QSlider::handle:horizontal {
+                background: #2196F3;
+                width: 16px;
+                margin: -4px 0;
+                border-radius: 8px;
+                border: none;
+            }
+        """)
+        self.main_window.rotation_slider.setRange(0, 360)
+        self.main_window.rotation_slider.setValue(self.main_window.watermark_rotation)
+        rotation_layout.addWidget(self.main_window.rotation_slider)
+        
+        self.main_window.rotation_value = QLabel(f"{self.main_window.watermark_rotation}°")
+        self.main_window.rotation_value.setFixedWidth(40)
+        rotation_layout.addWidget(self.main_window.rotation_value)
+        
+        return rotation_layout
